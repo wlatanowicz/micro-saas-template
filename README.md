@@ -120,6 +120,8 @@ Set the CloudFront **hostname** in `backend/serverless.yml` (`custom.frontendDom
 
 After changing Python dependencies, run **`uv lock`** in `backend/` and commit the updated **`uv.lock`**.
 
+GitHub Actions installs **Python via `actions/setup-python`** before **`setup-uv`**, because **`serverless-python-requirements`** shells out to **`python3.11 -m pip`**, and uv’s standalone interpreters may not ship with the `pip` module.
+
 ## License
 
 Use freely for your own products; add a license file if you open-source the template.

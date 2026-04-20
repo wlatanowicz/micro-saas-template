@@ -14,11 +14,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Full CPython + pip (serverless-python-requirements runs `python3.11 -m pip`).
+      # uv-managed Python from setup-uv alone often has no pip module.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          python-version: "3.11"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

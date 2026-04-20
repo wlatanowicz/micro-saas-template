@@ -1,0 +1,72 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      STAGE: prod
+      REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FRONTEND_ACM_CERT_ARN: ${{ secrets.FRONTEND_ACM_CERT_ARN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Install backend Python dependencies (Lambda packaging)
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Install backend npm dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Deploy backend stack
+        run: npx serverless@3 deploy --stage "${STAGE}" --region "${REGION}"
+        working-directory: backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Deploy frontend to S3
+        run: bash scripts/deploy-frontend.sh "${STAGE}" "${REGION}"
+
+      - name: Update Cloudflare CNAME to CloudFront
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_ZONE_NAME: ${{ secrets.CLOUDFLARE_ZONE_NAME }}
+        run: bash scripts/update-cloudflare-frontend-cname.sh "${STAGE}" "${REGION}"

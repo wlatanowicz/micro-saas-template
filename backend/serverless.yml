@@ -1,0 +1,153 @@
+service: micro-saas-app
+
+frameworkVersion: "3"
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux
+    slim: true
+    strip: false
+    noDeploy:
+      - boto3
+      - botocore
+
+  frontendDomainNames:
+    prod: app.example.com
+    dev: app-dev.example.com
+  frontendDomainName: ${env:FRONTEND_DOMAIN_NAME, self:custom.frontendDomainNames.${self:provider.stage}, 'app.example.com'}
+  # ACM certificate in us-east-1 (required for CloudFront custom domain). Replace for real deploys.
+  frontendAcmCertArn: ${env:FRONTEND_ACM_CERT_ARN, 'arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000'}
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: ${opt:region, 'eu-central-1'}
+  stage: ${opt:stage, 'prod'}
+  memorySize: 512
+  timeout: 30
+  httpApi:
+    cors:
+      allowedOrigins:
+        - "*"
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+  environment:
+    DATABASE_URL: ${env:DATABASE_URL, ''}
+
+functions:
+  api:
+    handler: src.handler.handler
+    events:
+      - httpApi:
+          path: /
+          method: ANY
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+
+package:
+  patterns:
+    - "!venv/**"
+    - "!.venv/**"
+    - "!tests/**"
+    - "!**/__pycache__/**"
+    - "!*.pyc"
+    - "!alembic/**"
+    - "!alembic.ini"
+    - "!requirements-dev.txt"
+    - "!pyproject.toml"
+    - "!.ruff_cache/**"
+
+resources:
+  Resources:
+    FrontendBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: !Sub "${self:service}-${self:provider.stage}-frontend-${AWS::AccountId}"
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: index.html
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          IgnorePublicAcls: false
+          BlockPublicPolicy: false
+          RestrictPublicBuckets: false
+
+    FrontendBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref FrontendBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource: !Sub "${FrontendBucket.Arn}/*"
+
+    FrontendCloudFrontDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Enabled: true
+          Comment: !Sub "${self:service}-${self:provider.stage} frontend"
+          Aliases:
+            - ${self:custom.frontendDomainName}
+          Origins:
+            - Id: FrontendS3WebsiteOrigin
+              DomainName: !Sub "${FrontendBucket}.s3-website.${AWS::Region}.amazonaws.com"
+              CustomOriginConfig:
+                HTTPPort: 80
+                HTTPSPort: 443
+                OriginProtocolPolicy: http-only
+          DefaultCacheBehavior:
+            TargetOriginId: FrontendS3WebsiteOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+          DefaultRootObject: index.html
+          CustomErrorResponses:
+            - ErrorCode: 403
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+            - ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+          PriceClass: PriceClass_100
+          ViewerCertificate:
+            AcmCertificateArn: ${self:custom.frontendAcmCertArn}
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+
+  Outputs:
+    FrontendBucketName:
+      Value: !Ref FrontendBucket
+    FrontendWebsiteURL:
+      Value: !GetAtt FrontendBucket.WebsiteURL
+    FrontendCloudFrontDomainName:
+      Value: !GetAtt FrontendCloudFrontDistribution.DomainName
+    FrontendCloudFrontDistributionId:
+      Value: !Ref FrontendCloudFrontDistribution
+    FrontendCustomDomainName:
+      Value: "${self:custom.frontendDomainName}"

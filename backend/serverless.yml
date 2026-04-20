@@ -15,12 +15,11 @@ custom:
       - boto3
       - botocore
 
-  frontendDomainNames:
-    prod: app.example.com
-    dev: app-dev.example.com
-  frontendDomainName: ${env:FRONTEND_DOMAIN_NAME, self:custom.frontendDomainNames.${self:provider.stage}, 'app.example.com'}
-  # ACM certificate in us-east-1 (required for CloudFront custom domain). Replace for real deploys.
-  frontendAcmCertArn: ${env:FRONTEND_ACM_CERT_ARN, 'arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000'}
+  # Custom hostname + ACM are optional. Set BOTH env vars for a custom domain; otherwise CloudFront
+  # uses the default *.cloudfront.net certificate (no Aliases). The ACM cert must be in us-east-1
+  # and include this hostname in SAN, or creation fails with an invalid CNAME error.
+  frontendDomainName: ${env:FRONTEND_DOMAIN_NAME, ''}
+  frontendAcmCertArn: ${env:FRONTEND_ACM_CERT_ARN, ''}
 
 provider:
   name: aws
@@ -72,6 +71,18 @@ package:
     - "!.ruff_cache/**"
 
 resources:
+  Conditions:
+    HasFrontendCustomDomain:
+      Fn::And:
+        - Fn::Not:
+            - Fn::Equals:
+                - "${self:custom.frontendDomainName}"
+                - ""
+        - Fn::Not:
+            - Fn::Equals:
+                - "${self:custom.frontendAcmCertArn}"
+                - ""
+
   Resources:
     FrontendBucket:
       Type: AWS::S3::Bucket
@@ -105,7 +116,10 @@ resources:
           Enabled: true
           Comment: !Sub "${self:service}-${self:provider.stage} frontend"
           Aliases:
-            - ${self:custom.frontendDomainName}
+            Fn::If:
+              - HasFrontendCustomDomain
+              - - "${self:custom.frontendDomainName}"
+              - Ref: AWS::NoValue
           Origins:
             - Id: FrontendS3WebsiteOrigin
               DomainName: !Sub "${FrontendBucket}.s3-website.${AWS::Region}.amazonaws.com"
@@ -138,9 +152,12 @@ resources:
               ResponsePagePath: /index.html
           PriceClass: PriceClass_100
           ViewerCertificate:
-            AcmCertificateArn: ${self:custom.frontendAcmCertArn}
-            SslSupportMethod: sni-only
-            MinimumProtocolVersion: TLSv1.2_2021
+            Fn::If:
+              - HasFrontendCustomDomain
+              - AcmCertificateArn: "${self:custom.frontendAcmCertArn}"
+                SslSupportMethod: sni-only
+                MinimumProtocolVersion: TLSv1.2_2021
+              - CloudFrontDefaultCertificate: true
 
   Outputs:
     FrontendBucketName:
@@ -152,4 +169,8 @@ resources:
     FrontendCloudFrontDistributionId:
       Value: !Ref FrontendCloudFrontDistribution
     FrontendCustomDomainName:
-      Value: "${self:custom.frontendDomainName}"
+      Value:
+        Fn::If:
+          - HasFrontendCustomDomain
+          - "${self:custom.frontendDomainName}"
+          - ""

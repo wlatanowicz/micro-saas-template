@@ -18,6 +18,7 @@ jobs:
       REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       FRONTEND_ACM_CERT_ARN: ${{ secrets.FRONTEND_ACM_CERT_ARN }}
+      FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
 
     steps:
       - name: Checkout

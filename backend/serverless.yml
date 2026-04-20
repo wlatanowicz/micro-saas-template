@@ -7,6 +7,7 @@ plugins:
 
 custom:
   pythonRequirements:
+    fileName: requirements-lambda.txt
     dockerizePip: non-linux
     slim: true
     strip: false
@@ -65,8 +66,9 @@ package:
     - "!*.pyc"
     - "!alembic/**"
     - "!alembic.ini"
-    - "!requirements-dev.txt"
     - "!pyproject.toml"
+    - "!uv.lock"
+    - "!requirements-lambda.txt"
     - "!.ruff_cache/**"
 
 resources:

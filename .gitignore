@@ -33,3 +33,6 @@ frontend/dist/
 
 # Alembic / local DB scratch
 *.db
+
+# Generated for serverless-python-requirements (from uv lockfile)
+backend/requirements-lambda.txt

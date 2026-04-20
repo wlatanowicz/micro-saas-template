@@ -10,8 +10,9 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 ## Prerequisites
 
+- [uv](https://docs.astral.sh/uv/) (Python toolchain and lockfile-driven installs)
 - Node.js 22+ and npm (Serverless CLI + frontend build)
-- Python 3.11 (matches `serverless.yml` runtime; adjust if you upgrade the framework schema)
+- Python 3.11 (matches `serverless.yml` runtime; uv will install/use it via `setup-uv` in CI)
 - AWS account, ACM certificate in **us-east-1** for the CloudFront custom hostname
 - PostgreSQL (or compatible) URL for `DATABASE_URL` if you use the API routes that touch the DB
 
@@ -25,14 +26,15 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 ## Local backend
 
+Dependencies live in [`backend/pyproject.toml`](backend/pyproject.toml) and [`backend/uv.lock`](backend/uv.lock). Runtime third-party deps are the `[project]` section; **Alembic** and test tooling are in the **dev** group (not bundled into Lambda).
+
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+uv sync --all-groups
 export DATABASE_URL='postgresql://user:pass@host:5432/dbname'   # optional for /api/items
-pytest
-ruff check src tests
-PYTHONPATH=. uvicorn src.main:app --reload --port 8000
+uv run pytest
+uv run ruff check src tests
+PYTHONPATH=. uv run uvicorn src.main:app --reload --port 8000
 ```
 
 ## Database migrations
@@ -41,15 +43,15 @@ Migrations are **not** applied automatically in deploy (to avoid surprising a sh
 
 ```bash
 cd backend
-source .venv/bin/activate
+uv sync --all-groups
 export DATABASE_URL='postgresql://...'
-alembic upgrade head
+uv run alembic upgrade head
 ```
 
 For a new migration after changing models:
 
 ```bash
-alembic revision --autogenerate -m "describe change"
+uv run alembic revision --autogenerate -m "describe change"
 ```
 
 ## Local frontend
@@ -68,12 +70,14 @@ From `backend/` (requires AWS credentials and env vars as in CI):
 
 ```bash
 npm ci
-pip install -r requirements.txt
+uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements-lambda.txt
 export DATABASE_URL='postgresql://...'
 export FRONTEND_ACM_CERT_ARN='arn:aws:acm:us-east-1:...:certificate/...'
 export FRONTEND_DOMAIN_NAME='app.yourdomain.com'   # optional if defaults in serverless.yml are fine
 npx serverless@3 deploy --stage prod --region eu-central-1
 ```
+
+Or use `npm run deploy` from `backend/`, which runs **`predeploy`** and regenerates `requirements-lambda.txt` automatically.
 
 Then from repo root:
 
@@ -88,7 +92,7 @@ Scripts accept an optional third argument: **CloudFormation stack name** (defaul
 
 ### `CI` (`.github/workflows/ci.yml`)
 
-Runs on every push and pull request: Python tests + Ruff, Serverless config `print`, frontend build.
+Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `requirements-lambda.txt`, Serverless `print`, frontend build.
 
 ### `Deploy` (`.github/workflows/deploy.yml`)
 
@@ -110,8 +114,11 @@ Set the CloudFront **hostname** in `backend/serverless.yml` (`custom.frontendDom
 
 ## Lambda packaging notes
 
-- `serverless-python-requirements` bundles dependencies; `slim: true` keeps the zip smaller. On macOS, `dockerizePip: non-linux` uses Docker for Linux-compatible wheels when needed.
-- Runtime includes `boto3` already; it is listed under `noDeploy` to avoid duplication.
+- **uv** produces `backend/requirements-lambda.txt` for **`serverless-python-requirements`** (`uv export --frozen --no-dev --no-emit-project --no-hashes`). That file is gitignored; CI and `npm run predeploy` create it before deploy. Application code is packaged by Serverless separately; the export lists only third-party runtime deps (Alembic stays in the dev group only).
+- `serverless-python-requirements` bundles those dependencies; `slim: true` keeps the zip smaller. On macOS, `dockerizePip: non-linux` uses Docker for Linux-compatible wheels when needed.
+- Lambda runtime already includes `boto3`; it is listed under `noDeploy` to avoid duplication.
+
+After changing Python dependencies, run **`uv lock`** in `backend/` and commit the updated **`uv.lock`**.
 
 ## License
 

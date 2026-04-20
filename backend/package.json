@@ -4,6 +4,8 @@
   "private": true,
   "description": "Serverless Framework wrapper for Python Lambda packaging",
   "scripts": {
+    "export-lambda-reqs": "uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements-lambda.txt",
+    "predeploy": "npm run export-lambda-reqs",
     "deploy": "serverless deploy",
     "remove": "serverless remove"
   },

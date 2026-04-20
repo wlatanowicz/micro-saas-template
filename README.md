@@ -108,7 +108,7 @@ Runs on pushes to `main` and on `workflow_dispatch`.
 | Secret | `CLOUDFLARE_ZONE_ID` | Optional; or use `CLOUDFLARE_ZONE_NAME` |
 | Secret | `CLOUDFLARE_ZONE_NAME` | Optional; e.g. `example.com` |
 
-OIDC trust and IAM permissions should mirror what you use for Serverless deploy, S3 sync, and CloudFront invalidation. A step-by-step role outline exists in projects like **water_meter** (`docs/github-oidc-role.md`) if you keep that doc alongside your apps.
+OIDC trust and IAM permissions for deploy are documented in **[docs/github-actions-aws-oidc.md](docs/github-actions-aws-oidc.md)**.
 
 Set the CloudFront **hostname** in `backend/serverless.yml` (`custom.frontendDomainNames` / `FRONTEND_DOMAIN_NAME` when exporting for a manual deploy). The deploy workflow does not set `FRONTEND_DOMAIN_NAME` by default so an empty GitHub variable cannot override your file defaults.
 

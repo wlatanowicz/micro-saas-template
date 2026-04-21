@@ -24,6 +24,7 @@ frontend/dist/
 # Env / local
 .env
 .env.local
+.env.gha
 *.local
 
 # IDE / OS

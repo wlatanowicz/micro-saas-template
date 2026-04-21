@@ -29,6 +29,47 @@ for cmd in aws jq python3; do
   }
 done
 
+load_existing_env_gha() {
+  local f="$1"
+  [[ -f "$f" ]] || return 0
+  echo "Loading defaults from existing ${f}"
+  # shellcheck disable=SC1090
+  source /dev/stdin <<<"$(python3 - "$f" <<'PY'
+import pathlib
+import re
+import shlex
+import sys
+
+p = pathlib.Path(sys.argv[1])
+key_ok = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+out = []
+for raw in p.read_text(encoding="utf-8").splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        continue
+    if "=" not in line:
+        continue
+    k, _, v = line.partition("=")
+    k = k.strip()
+    if not key_ok.match(k):
+        continue
+    v = v.strip()
+    if not v:
+        out.append(f"export {k}=''")
+        continue
+    try:
+        parts = shlex.split(v, posix=True)
+        val = parts[0] if parts else ""
+    except ValueError:
+        val = ""
+    out.append(f"export {k}={shlex.quote(val)}")
+print("\n".join(out))
+PY
+)"
+}
+
+load_existing_env_gha "$OUT_FILE"
+
 if [[ -n "${AWS_PROFILE:-}" ]]; then
   export AWS_PROFILE
   echo "Using AWS_PROFILE=${AWS_PROFILE}"
@@ -47,7 +88,10 @@ if [[ -n "${AWS_PROFILE:-}" ]]; then
   PROFILE_ARGS=(--profile "$AWS_PROFILE")
 fi
 
-REGION="$(aws configure get region "${PROFILE_ARGS[@]}" 2>/dev/null | tr -d '\r' || true)"
+REGION="${AWS_REGION:-}"
+if [[ -z "${REGION}" ]]; then
+  REGION="$(aws configure get region "${PROFILE_ARGS[@]}" 2>/dev/null | tr -d '\r' || true)"
+fi
 if [[ -z "${REGION}" ]]; then
   read -rp "AWS region for RDS / deploy (e.g. eu-central-1): " REGION
 fi
@@ -84,53 +128,78 @@ print(f'postgresql://{user}:{password}@{addr}:{port}/{dbname}')
   unset _COLLECT_DB_USER _COLLECT_DB_ADDR _COLLECT_DB_PORT _COLLECT_DB_NAME
 }
 
-DATABASE_URL=""
+: "${DATABASE_URL:=}"
+
 echo ""
 echo "=== DATABASE_URL ==="
-RDS_JSON="$(aws rds describe-db-instances "${PROFILE_ARGS[@]}" --region "$REGION" --output json 2>/dev/null || echo '{"DBInstances":[]}')"
-RDS_COUNT="$(jq '.DBInstances | length' <<< "$RDS_JSON")"
+SKIP_DB_WIZARD=false
+if [[ -n "${DATABASE_URL}" ]]; then
+  echo "DATABASE_URL already set (${#DATABASE_URL} characters from .env.gha)."
+  read -rp "Keep [k], rebuild from RDS [r], or manual URL [m] [k]: " db_choice
+  db_choice="${db_choice:-k}"
+  case "${db_choice}" in
+    r | R) SKIP_DB_WIZARD=false ;;
+    m | M)
+      read -rp "DATABASE_URL [Enter to keep current]: " NEW_DB_URL
+      DATABASE_URL="${NEW_DB_URL:-$DATABASE_URL}"
+      SKIP_DB_WIZARD=true
+      ;;
+    *)
+      SKIP_DB_WIZARD=true
+      ;;
+  esac
+fi
 
-if [[ "$RDS_COUNT" -eq 0 ]]; then
-  echo "No RDS instances in ${REGION}."
-  read -rp "Paste DATABASE_URL manually (or leave empty to fill later): " DATABASE_URL
-else
-  echo "RDS instances in ${REGION}:"
-  RDS_IDS=()
-  while IFS= read -r line; do
-    [[ -n "$line" ]] && RDS_IDS+=("$line")
-  done < <(jq -r '.DBInstances[].DBInstanceIdentifier' <<< "$RDS_JSON")
-  for ((idx = 0; idx < ${#RDS_IDS[@]}; idx++)); do
-    ep="$(jq -r --arg id "${RDS_IDS[$idx]}" '.DBInstances[] | select(.DBInstanceIdentifier==$id) | .Endpoint.Address' <<< "$RDS_JSON")"
-    echo "  [$idx] ${RDS_IDS[$idx]}  (${ep})"
-  done
-  read -rp "Select index [0-$((${#RDS_IDS[@]} - 1))], or 'm' for manual URL: " pick
-  if [[ "$pick" == "m" ]]; then
-    read -rp "DATABASE_URL: " DATABASE_URL
+if ! $SKIP_DB_WIZARD; then
+  RDS_JSON="$(aws rds describe-db-instances "${PROFILE_ARGS[@]}" --region "$REGION" --output json 2>/dev/null || echo '{"DBInstances":[]}')"
+  RDS_COUNT="$(jq '.DBInstances | length' <<< "$RDS_JSON")"
+
+  if [[ "$RDS_COUNT" -eq 0 ]]; then
+    echo "No RDS instances in ${REGION}."
+    read -rp "Paste DATABASE_URL [Enter to keep existing / leave unchanged]: " NEW_DB_URL
+    DATABASE_URL="${NEW_DB_URL:-$DATABASE_URL}"
   else
-    if ! [[ "$pick" =~ ^[0-9]+$ ]] || [[ "$pick" -lt 0 ]] || [[ "$pick" -ge ${#RDS_IDS[@]} ]]; then
-      echo "Invalid selection." >&2
-      exit 1
-    fi
-    RID="${RDS_IDS[$pick]}"
-    default_db="postgres"
-    read -rp "Database name [${default_db}]: " dbname
-    dbname="${dbname:-$default_db}"
-    read -rsp "Database password (master user; input hidden): " dbpass
-    echo ""
-    if [[ -z "$dbpass" ]]; then
-      echo "Password empty; enter full DATABASE_URL or fix later in .env.gha" >&2
-      read -rp "DATABASE_URL (full) or Enter to skip: " DATABASE_URL
+    echo "RDS instances in ${REGION}:"
+    RDS_IDS=()
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && RDS_IDS+=("$line")
+    done < <(jq -r '.DBInstances[].DBInstanceIdentifier' <<< "$RDS_JSON")
+    for ((idx = 0; idx < ${#RDS_IDS[@]}; idx++)); do
+      ep="$(jq -r --arg id "${RDS_IDS[$idx]}" '.DBInstances[] | select(.DBInstanceIdentifier==$id) | .Endpoint.Address' <<< "$RDS_JSON")"
+      echo "  [$idx] ${RDS_IDS[$idx]}  (${ep})"
+    done
+    read -rp "Select index [0-$((${#RDS_IDS[@]} - 1))], 'm' manual URL: " pick
+    if [[ "$pick" == "m" ]]; then
+      read -rp "DATABASE_URL [Enter to keep existing]: " NEW_DB_URL
+      DATABASE_URL="${NEW_DB_URL:-$DATABASE_URL}"
     else
-      export _COLLECT_DB_PASS="$dbpass"
-      DATABASE_URL="$(build_database_url_from_rds "$RID" "$dbname")"
-      unset _COLLECT_DB_PASS
+      if ! [[ "$pick" =~ ^[0-9]+$ ]] || [[ "$pick" -lt 0 ]] || [[ "$pick" -ge ${#RDS_IDS[@]} ]]; then
+        echo "Invalid selection." >&2
+        exit 1
+      fi
+      RID="${RDS_IDS[$pick]}"
+      default_db="postgres"
+      read -rp "Database name [${default_db}]: " dbname
+      dbname="${dbname:-$default_db}"
+      read -rsp "Database password (master user; input hidden): " dbpass
+      echo ""
+      if [[ -z "$dbpass" ]]; then
+        echo "Password empty; keeping or setting DATABASE_URL manually." >&2
+        read -rp "DATABASE_URL [Enter to keep existing]: " NEW_DB_URL
+        DATABASE_URL="${NEW_DB_URL:-$DATABASE_URL}"
+      else
+        export _COLLECT_DB_PASS="$dbpass"
+        DATABASE_URL="$(build_database_url_from_rds "$RID" "$dbname")"
+        unset _COLLECT_DB_PASS
+      fi
     fi
   fi
 fi
 
 echo ""
 echo "=== ACM certificate (us-east-1, for CloudFront custom domain) ==="
-FRONTEND_ACM_CERT_ARN=""
+: "${FRONTEND_ACM_CERT_ARN:=}"
+[[ -n "${FRONTEND_ACM_CERT_ARN}" ]] && echo "Current FRONTEND_ACM_CERT_ARN from .env.gha is set (${#FRONTEND_ACM_CERT_ARN} chars)."
 CERT_JSON="$(aws acm list-certificates "${PROFILE_ARGS[@]}" --region us-east-1 \
   --certificate-statuses ISSUED \
   --query 'CertificateSummaryList' --output json 2>/dev/null || echo '[]')"
@@ -138,7 +207,8 @@ CERT_COUNT="$(jq 'length' <<< "$CERT_JSON")"
 
 if [[ "$CERT_COUNT" -eq 0 ]]; then
   echo "No ISSUED certificates in us-east-1."
-  read -rp "FRONTEND_ACM_CERT_ARN (or Enter to skip custom domain): " FRONTEND_ACM_CERT_ARN
+  read -rp "FRONTEND_ACM_CERT_ARN [Enter to keep existing / blank]: " NEW_CERT
+  FRONTEND_ACM_CERT_ARN="${NEW_CERT:-$FRONTEND_ACM_CERT_ARN}"
 else
   echo "ISSUED certificates in us-east-1:"
   CERT_ARNS=()
@@ -149,10 +219,15 @@ else
     dn="$(jq -r --arg arn "${CERT_ARNS[$idx]}" '.[] | select(.CertificateArn==$arn) | .DomainName' <<< "$CERT_JSON")"
     echo "  [$idx] ${dn}  ${CERT_ARNS[$idx]}"
   done
-  read -rp "Select index, 's' to skip, or 'p' to paste ARN: " cpick
+  read -rp "Select index, 'k' keep existing, 's' clear, 'p' paste ARN [k]: " cpick
+  cpick="${cpick:-k}"
   case "$cpick" in
-    s) FRONTEND_ACM_CERT_ARN="" ;;
-    p) read -rp "FRONTEND_ACM_CERT_ARN: " FRONTEND_ACM_CERT_ARN ;;
+    k | K) ;;
+    s | S) FRONTEND_ACM_CERT_ARN="" ;;
+    p | P)
+      read -rp "FRONTEND_ACM_CERT_ARN: " NEW_CERT
+      FRONTEND_ACM_CERT_ARN="${NEW_CERT:-$FRONTEND_ACM_CERT_ARN}"
+      ;;
     *)
       if ! [[ "$cpick" =~ ^[0-9]+$ ]] || [[ "$cpick" -lt 0 ]] || [[ "$cpick" -ge ${#CERT_ARNS[@]} ]]; then
         echo "Invalid selection." >&2
@@ -166,17 +241,27 @@ fi
 echo ""
 echo "=== GitHub OIDC deploy role ==="
 echo "Create the role per docs/github-actions-aws-oidc.md; paste its ARN."
-read -rp "AWS_ROLE_TO_ASSUME (required for deploy workflow): " AWS_ROLE_TO_ASSUME
+: "${AWS_ROLE_TO_ASSUME:=}"
+read -rp "AWS_ROLE_TO_ASSUME [Enter to keep]: " NEW_ROLE
+AWS_ROLE_TO_ASSUME="${NEW_ROLE:-$AWS_ROLE_TO_ASSUME}"
 
 echo ""
 echo "=== Optional: custom SPA hostname (must match ACM cert SAN) ==="
-read -rp "FRONTEND_DOMAIN_NAME (or Enter to skip): " FRONTEND_DOMAIN_NAME
+: "${FRONTEND_DOMAIN_NAME:=}"
+read -rp "FRONTEND_DOMAIN_NAME [Enter to keep]: " NEW_DOM
+FRONTEND_DOMAIN_NAME="${NEW_DOM:-$FRONTEND_DOMAIN_NAME}"
 
 echo ""
 echo "=== Optional: Cloudflare DNS automation ==="
-read -rp "CLOUDFLARE_API_TOKEN (or Enter to skip): " CLOUDFLARE_API_TOKEN
-read -rp "CLOUDFLARE_ZONE_ID (or Enter to skip): " CLOUDFLARE_ZONE_ID
-read -rp "CLOUDFLARE_ZONE_NAME (e.g. example.com, or Enter to skip): " CLOUDFLARE_ZONE_NAME
+: "${CLOUDFLARE_API_TOKEN:=}"
+: "${CLOUDFLARE_ZONE_ID:=}"
+: "${CLOUDFLARE_ZONE_NAME:=}"
+read -rp "CLOUDFLARE_API_TOKEN [Enter to keep]: " NEW_CF
+CLOUDFLARE_API_TOKEN="${NEW_CF:-$CLOUDFLARE_API_TOKEN}"
+read -rp "CLOUDFLARE_ZONE_ID [Enter to keep]: " NEW_CFZ
+CLOUDFLARE_ZONE_ID="${NEW_CFZ:-$CLOUDFLARE_ZONE_ID}"
+read -rp "CLOUDFLARE_ZONE_NAME [Enter to keep]: " NEW_CFZN
+CLOUDFLARE_ZONE_NAME="${NEW_CFZN:-$CLOUDFLARE_ZONE_NAME}"
 
 write_env_file() {
   local target="$1"

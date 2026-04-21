@@ -128,7 +128,7 @@ With credentials available (e.g. **`AWS_PROFILE`**), run:
 AWS_PROFILE=your-profile ./scripts/collect-gha-env.sh
 ```
 
-The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1**, and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend domain** / **Cloudflare** values. It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
+The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1**, and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend domain** / **Cloudflare** values. It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. If **`.env.gha` already exists**, its values are loaded first and used as defaults (press **Enter** to keep each field, **`k`** to keep **DATABASE_URL** / ACM). Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
 
 Requires **AWS CLI**, **jq**, and **Python 3**. Copy lines from **`.env.gha`** into GitHub **Secrets** and **Variables** as labeled in the file header. The **master password** and **OIDC role ARN** are always prompted (not returned by AWS APIs).
 

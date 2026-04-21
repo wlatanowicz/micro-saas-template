@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Build .env.gha from AWS (AWS_PROFILE) + interactive prompts for GitHub Actions secrets/variables.
+# Prints secrets and DATABASE_URL in plaintext on the terminal (same as the generated file); for trusted operators only.
 # Usage: AWS_PROFILE=my-prof ./scripts/collect-gha-env.sh
 # Options: -n  print to stdout only (do not write .env.gha)
 #          -h  help
@@ -134,7 +135,8 @@ echo ""
 echo "=== DATABASE_URL ==="
 SKIP_DB_WIZARD=false
 if [[ -n "${DATABASE_URL}" ]]; then
-  echo "DATABASE_URL already set (${#DATABASE_URL} characters from .env.gha)."
+  echo "DATABASE_URL already set from .env.gha:"
+  printf '%s\n' "$DATABASE_URL"
   read -rp "Keep [k], rebuild from RDS [r], or manual URL [m] [k]: " db_choice
   db_choice="${db_choice:-k}"
   case "${db_choice}" in
@@ -181,8 +183,7 @@ if ! $SKIP_DB_WIZARD; then
       default_db="postgres"
       read -rp "Database name [${default_db}]: " dbname
       dbname="${dbname:-$default_db}"
-      read -rsp "Database password (master user; input hidden): " dbpass
-      echo ""
+      read -rp "Database password (master user; echoed — file is plaintext): " dbpass
       if [[ -z "$dbpass" ]]; then
         echo "Password empty; keeping or setting DATABASE_URL manually." >&2
         read -rp "DATABASE_URL [Enter to keep existing]: " NEW_DB_URL
@@ -199,7 +200,7 @@ fi
 echo ""
 echo "=== ACM certificate (us-east-1, for CloudFront custom domain) ==="
 : "${FRONTEND_ACM_CERT_ARN:=}"
-[[ -n "${FRONTEND_ACM_CERT_ARN}" ]] && echo "Current FRONTEND_ACM_CERT_ARN from .env.gha is set (${#FRONTEND_ACM_CERT_ARN} chars)."
+[[ -n "${FRONTEND_ACM_CERT_ARN}" ]] && echo "Current FRONTEND_ACM_CERT_ARN from .env.gha:" && printf '%s\n' "$FRONTEND_ACM_CERT_ARN"
 CERT_JSON="$(aws acm list-certificates "${PROFILE_ARGS[@]}" --region us-east-1 \
   --certificate-statuses ISSUED \
   --query 'CertificateSummaryList' --output json 2>/dev/null || echo '[]')"
@@ -240,14 +241,157 @@ fi
 
 echo ""
 echo "=== GitHub OIDC deploy role ==="
-echo "Create the role per docs/github-actions-aws-oidc.md; paste its ARN."
+echo "Create the role per docs/github-actions-aws-oidc.md if needed."
 : "${AWS_ROLE_TO_ASSUME:=}"
-read -rp "AWS_ROLE_TO_ASSUME [Enter to keep]: " NEW_ROLE
-AWS_ROLE_TO_ASSUME="${NEW_ROLE:-$AWS_ROLE_TO_ASSUME}"
+[[ -n "${AWS_ROLE_TO_ASSUME}" ]] && echo "Current AWS_ROLE_TO_ASSUME from .env.gha:" && printf '%s\n' "$AWS_ROLE_TO_ASSUME"
+
+PROFILE_ARG_FOR_PY=""
+[[ -n "${AWS_PROFILE:-}" ]] && PROFILE_ARG_FOR_PY="$AWS_PROFILE"
+
+echo "Searching IAM for roles that trust GitHub OIDC (token.actions.githubusercontent.com)..."
+OIDC_ROLES_JSON="$(
+  python3 - "$PROFILE_ARG_FOR_PY" <<'PY'
+import json
+import subprocess
+import sys
+
+# Principal Federated ARN contains this suffix for github.com Actions OIDC.
+GITHUB_OIDC = "oidc-provider/token.actions.githubusercontent.com"
+profile = sys.argv[1] if len(sys.argv) > 1 else ""
+
+
+def aws_json(argv):
+    cmd = ["aws"]
+    if profile:
+        cmd += ["--profile", profile]
+    cmd += argv + ["--output", "json"]
+    try:
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return {}
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        return {}
+
+
+def federated_arns(doc):
+    if isinstance(doc, str):
+        try:
+            doc = json.loads(doc)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(doc, dict):
+        return []
+    stmts = doc.get("Statement", [])
+    if isinstance(stmts, dict):
+        stmts = [stmts]
+    elif not isinstance(stmts, list):
+        return []
+    arns = []
+    for stmt in stmts:
+        if not isinstance(stmt, dict):
+            continue
+        principal = stmt.get("Principal")
+        if not isinstance(principal, dict):
+            continue
+        fed = principal.get("Federated")
+        if isinstance(fed, str):
+            arns.append(fed)
+        elif isinstance(fed, list):
+            arns.extend(str(x) for x in fed if isinstance(x, str))
+    return arns
+
+
+def trusts_github_oidc(assume_doc):
+    return any(GITHUB_OIDC in a for a in federated_arns(assume_doc))
+
+
+def list_all_role_names():
+    names = []
+    marker = None
+    while True:
+        args = ["iam", "list-roles"]
+        if marker:
+            args += ["--marker", marker]
+        data = aws_json(args)
+        if not data:
+            return []
+        for r in data.get("Roles", []):
+            if isinstance(r, dict) and r.get("RoleName"):
+                names.append(r["RoleName"])
+        marker = data.get("Marker")
+        if not marker:
+            break
+    return names
+
+
+def main():
+    out = []
+    for name in list_all_role_names():
+        data = aws_json(["iam", "get-role", "--role-name", name])
+        role = data.get("Role") if isinstance(data, dict) else None
+        if not isinstance(role, dict):
+            continue
+        doc = role.get("AssumeRolePolicyDocument")
+        if not trusts_github_oidc(doc):
+            continue
+        arn = role.get("Arn")
+        if isinstance(arn, str):
+            out.append({"RoleName": name, "Arn": arn})
+    print(json.dumps(out))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        print("[]")
+PY
+)" || OIDC_ROLES_JSON='[]'
+[[ -z "$OIDC_ROLES_JSON" ]] && OIDC_ROLES_JSON='[]'
+ROLE_COUNT="$(jq 'length' <<< "$OIDC_ROLES_JSON" 2>/dev/null)" || ROLE_COUNT=0
+ROLE_COUNT="${ROLE_COUNT:-0}"
+
+if [[ "$ROLE_COUNT" -eq 0 ]]; then
+  echo "No matching roles found (none in account, or IAM list/get denied). Paste ARN manually."
+  read -rp "AWS_ROLE_TO_ASSUME [Enter to keep]: " NEW_ROLE
+  AWS_ROLE_TO_ASSUME="${NEW_ROLE:-$AWS_ROLE_TO_ASSUME}"
+else
+  echo "IAM roles trusting GitHub Actions OIDC (token.actions.githubusercontent.com):"
+  ROLE_ARNS=()
+  ROLE_NAMES=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && ROLE_ARNS+=("$line")
+  done < <(jq -r '.[].Arn' <<< "$OIDC_ROLES_JSON")
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && ROLE_NAMES+=("$line")
+  done < <(jq -r '.[].RoleName' <<< "$OIDC_ROLES_JSON")
+  for ((idx = 0; idx < ${#ROLE_ARNS[@]}; idx++)); do
+    echo "  [$idx] ${ROLE_NAMES[$idx]}  ${ROLE_ARNS[$idx]}"
+  done
+  read -rp "Select index, 'k' keep existing, 'p' paste ARN [k]: " rpick
+  rpick="${rpick:-k}"
+  case "$rpick" in
+    k | K) ;;
+    p | P)
+      read -rp "AWS_ROLE_TO_ASSUME: " NEW_ROLE
+      AWS_ROLE_TO_ASSUME="${NEW_ROLE:-$AWS_ROLE_TO_ASSUME}"
+      ;;
+    *)
+      if ! [[ "$rpick" =~ ^[0-9]+$ ]] || [[ "$rpick" -lt 0 ]] || [[ "$rpick" -ge ${#ROLE_ARNS[@]} ]]; then
+        echo "Invalid selection." >&2
+        exit 1
+      fi
+      AWS_ROLE_TO_ASSUME="${ROLE_ARNS[$rpick]}"
+      ;;
+  esac
+fi
 
 echo ""
 echo "=== Optional: custom SPA hostname (must match ACM cert SAN) ==="
 : "${FRONTEND_DOMAIN_NAME:=}"
+[[ -n "${FRONTEND_DOMAIN_NAME}" ]] && echo "Current FRONTEND_DOMAIN_NAME from .env.gha:" && printf '%s\n' "$FRONTEND_DOMAIN_NAME"
 read -rp "FRONTEND_DOMAIN_NAME [Enter to keep]: " NEW_DOM
 FRONTEND_DOMAIN_NAME="${NEW_DOM:-$FRONTEND_DOMAIN_NAME}"
 
@@ -256,6 +400,9 @@ echo "=== Optional: Cloudflare DNS automation ==="
 : "${CLOUDFLARE_API_TOKEN:=}"
 : "${CLOUDFLARE_ZONE_ID:=}"
 : "${CLOUDFLARE_ZONE_NAME:=}"
+[[ -n "${CLOUDFLARE_API_TOKEN}" ]] && echo "Current CLOUDFLARE_API_TOKEN from .env.gha:" && printf '%s\n' "$CLOUDFLARE_API_TOKEN"
+[[ -n "${CLOUDFLARE_ZONE_ID}" ]] && echo "Current CLOUDFLARE_ZONE_ID from .env.gha:" && printf '%s\n' "$CLOUDFLARE_ZONE_ID"
+[[ -n "${CLOUDFLARE_ZONE_NAME}" ]] && echo "Current CLOUDFLARE_ZONE_NAME from .env.gha:" && printf '%s\n' "$CLOUDFLARE_ZONE_NAME"
 read -rp "CLOUDFLARE_API_TOKEN [Enter to keep]: " NEW_CF
 CLOUDFLARE_API_TOKEN="${NEW_CF:-$CLOUDFLARE_API_TOKEN}"
 read -rp "CLOUDFLARE_ZONE_ID [Enter to keep]: " NEW_CFZ
@@ -311,10 +458,16 @@ PY
 }
 
 if $DRY_RUN; then
+  echo ""
+  echo "=== Generated .env.gha (stdout, plaintext — copy to GitHub Actions) ==="
   write_env_file -
 else
+  echo ""
   umask 077
   write_env_file "$OUT_FILE"
+  echo "Wrote ${OUT_FILE} (mode 600). Full plaintext contents:"
   echo ""
-  echo "Wrote ${OUT_FILE} (private mode). Copy values into GitHub Actions secrets and variables."
+  cat "$OUT_FILE"
+  echo ""
+  echo "Copy values into GitHub Actions secrets and variables."
 fi

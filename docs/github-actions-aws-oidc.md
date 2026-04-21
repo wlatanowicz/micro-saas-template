@@ -94,7 +94,8 @@ For **`workflow_dispatch`**, subjects can include environment-specific claims; i
 The deploy job in this template:
 
 - Runs **Serverless Framework** in `backend/` (CloudFormation, Lambda, API Gateway HTTP API, IAM for execution roles, CloudWatch Logs, S3 buckets created by the stack, etc.).
-- Runs **`scripts/deploy-frontend.sh`**: reads CloudFormation outputs, **`aws s3 sync`** to the frontend bucket, **`aws cloudfront create-invalidation`**.
+- Runs **`scripts/deploy-frontend.sh`**: reads CloudFormation outputs, **`aws s3 sync`** to the frontend bucket, **`aws cloudfront create-invalidation`**.  
+- Runs **`scripts/invoke-migrate-lambda.sh`**: invokes the **`migrate`** Lambda (Alembic **upgrade head**) using the **`MigrateLambdaName`** stack output.
 
 Exact least-privilege policies depend on your naming conventions and optional resource boundaries. Practical approaches:
 
@@ -104,7 +105,7 @@ Exact least-privilege policies depend on your naming conventions and optional re
 At minimum, the role must allow:
 
 - **CloudFormation** — create/update/describe/delete stacks and change sets for your stack(s).  
-- **Lambda**, **API Gateway v2**, **IAM** (create roles/policies the Serverless template attaches to the function; often includes `iam:PassRole` for the Lambda execution role).  
+- **Lambda**, **API Gateway v2**, **IAM** (create roles/policies the Serverless template attaches to the function; often includes `iam:PassRole` for the Lambda execution role). The deploy workflow also needs **`lambda:InvokeFunction`** on the migration function (for example `arn:aws:lambda:REGION:ACCOUNT_ID:function:SERVICE-STAGE-migrate` or a wildcard that includes it).  
 - **S3** — bucket and object operations for the Serverless-managed buckets and `s3 sync` targets.  
 - **CloudFront** — `CreateInvalidation` (and read distribution metadata if your scripts list distributions).  
 - **CloudWatch Logs** — log groups for Lambda.  

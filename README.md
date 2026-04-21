@@ -6,7 +6,7 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 - `backend/` — Serverless stack, FastAPI app, Alembic migrations
 - `frontend/` — React SPA (`VITE_API_BASE_URL` injected at build time)
-- `scripts/` — Deploy frontend to S3 + invalidate CloudFront; optional Cloudflare CNAME update
+- `scripts/` — Deploy frontend to S3 + invalidate CloudFront; invoke migration Lambda; optional Cloudflare CNAME update
 
 ## Prerequisites
 
@@ -20,12 +20,13 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 1. In `backend/serverless.yml`, set `service:` to your stack name prefix (default stack is `{service}-{stage}`).
 2. Optional: set **`FRONTEND_DOMAIN_NAME`** and **`FRONTEND_ACM_CERT_ARN`** (us-east-1) together when deploying. The certificate’s SAN must include that hostname; otherwise CloudFront returns an invalid CNAME error. If you omit either, the stack uses the default **\*.cloudfront.net** URL only.
+3. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database; ensure the network path from Lambda to the DB is allowed (public endpoint, VPC + security groups, or RDS Proxy as appropriate).
 4. Copy `frontend/.env.example` to `frontend/.env` for local dev and set `VITE_API_BASE_URL` to your API URL (or local server).
-5. Configure GitHub **Actions** secrets and variables (below).
+5. Configure GitHub **Actions** secrets and variables (below). Grant the OIDC role **`lambda:InvokeFunction`** on the **`migrate`** function (see [docs/github-actions-aws-oidc.md](docs/github-actions-aws-oidc.md)).
 
 ## Local backend
 
-Dependencies live in [`backend/pyproject.toml`](backend/pyproject.toml) and [`backend/uv.lock`](backend/uv.lock). Runtime third-party deps are the `[project]` section; **Alembic** and test tooling are in the **dev** group (not bundled into Lambda).
+Dependencies live in [`backend/pyproject.toml`](backend/pyproject.toml) and [`backend/uv.lock`](backend/uv.lock). Runtime deps include **Alembic** (used by the **`migrate`** Lambda). Test tooling stays in the **dev** dependency group.
 
 ```bash
 cd backend
@@ -38,13 +39,21 @@ PYTHONPATH=. uv run uvicorn src.main:app --reload --port 8000
 
 ## Database migrations
 
-Migrations are **not** applied automatically in deploy (to avoid surprising a shared database).
+**Deploy workflow:** after `serverless deploy`, GitHub Actions runs **`scripts/invoke-migrate-lambda.sh`**, which invokes the **`migrate`** Lambda. That function runs **`alembic upgrade head`** programmatically (`command.upgrade`). The stack output **`MigrateLambdaName`** is the function to call.
+
+**Local / manual:**
 
 ```bash
 cd backend
 uv sync --all-groups
 export DATABASE_URL='postgresql://...'
 uv run alembic upgrade head
+```
+
+After a successful deploy (CLI), from repo root:
+
+```bash
+bash scripts/invoke-migrate-lambda.sh prod eu-central-1
 ```
 
 For a new migration after changing models:
@@ -96,12 +105,12 @@ Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `r
 
 ### `Deploy` (`.github/workflows/deploy.yml`)
 
-Runs on pushes to `main` and on `workflow_dispatch`.
+Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run migrations Lambda** → deploy frontend → optional Cloudflare DNS.
 
 | Type | Name | Purpose |
 |------|------|---------|
 | Secret | `AWS_ROLE_TO_ASSUME` | IAM role ARN for OIDC (`sts:AssumeRoleWithWebIdentity` from GitHub) |
-| Secret | `DATABASE_URL` | Passed to Lambda as `DATABASE_URL` |
+| Secret | `DATABASE_URL` | Passed to Lambdas (`api`, **`migrate`**). Required for migration step if the database should be updated on deploy. |
 | Secret | `FRONTEND_ACM_CERT_ARN` | Optional; ACM cert ARN (us-east-1). Required with `FRONTEND_DOMAIN_NAME` if you use a custom SPA domain. |
 | Variable | `AWS_REGION` | Optional; default `eu-central-1` |
 | Variable | `FRONTEND_DOMAIN_NAME` | Optional; custom SPA hostname. Use with `FRONTEND_ACM_CERT_ARN`; leave unset for default CloudFront URL only. |
@@ -115,7 +124,7 @@ Optional custom CloudFront hostname is controlled only by environment variables 
 
 ## Lambda packaging notes
 
-- **uv** produces `backend/requirements-lambda.txt` for **`serverless-python-requirements`** (`uv export --frozen --no-dev --no-emit-project --no-hashes`). That file is gitignored; CI and `npm run predeploy` create it before deploy. Application code is packaged by Serverless separately; the export lists only third-party runtime deps (Alembic stays in the dev group only).
+- **uv** produces `backend/requirements-lambda.txt` for **`serverless-python-requirements`** (`uv export --frozen --no-dev --no-emit-project --no-hashes`). That file is gitignored; CI and `npm run predeploy` create it before deploy. **`package.individually: true`**: the **`api`** function excludes `alembic/` and **`migrate_handler.py`**; the **`migrate`** function ships `alembic/` + `alembic.ini` plus app models. Both bundles still include shared runtime wheels (including Alembic) from the same export.
 - `serverless-python-requirements` bundles those dependencies; `slim: true` keeps the zip smaller. On macOS, `dockerizePip: non-linux` uses Docker for Linux-compatible wheels when needed.
 - Lambda runtime already includes `boto3`; it is listed under `noDeploy` to avoid duplication.
 

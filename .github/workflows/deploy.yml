@@ -61,6 +61,9 @@ jobs:
         run: npx serverless@3 deploy --stage "${STAGE}" --region "${REGION}"
         working-directory: backend
 
+      - name: Run database migrations (Lambda)
+        run: bash scripts/invoke-migrate-lambda.sh "${STAGE}" "${REGION}"
+
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend

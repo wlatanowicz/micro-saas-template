@@ -48,6 +48,11 @@ provider:
 functions:
   api:
     handler: src.handler.handler
+    package:
+      patterns:
+        - "!alembic/**"
+        - "!alembic.ini"
+        - "!src/migrate_handler.py"
     events:
       - httpApi:
           path: /
@@ -56,15 +61,20 @@ functions:
           path: /{proxy+}
           method: ANY
 
+  migrate:
+    handler: src/migrate_handler.handler
+    timeout: 120
+    memorySize: 512
+    description: Alembic upgrade head (invoke after deploy)
+
 package:
+  individually: true
   patterns:
     - "!venv/**"
     - "!.venv/**"
     - "!tests/**"
     - "!**/__pycache__/**"
     - "!*.pyc"
-    - "!alembic/**"
-    - "!alembic.ini"
     - "!pyproject.toml"
     - "!uv.lock"
     - "!requirements-lambda.txt"
@@ -174,3 +184,8 @@ resources:
           - HasFrontendCustomDomain
           - "${self:custom.frontendDomainName}"
           - ""
+
+    MigrateLambdaName:
+      Description: Physical name of the migration Lambda (invoke after deploy)
+      Value:
+        Ref: MigrateLambdaFunction

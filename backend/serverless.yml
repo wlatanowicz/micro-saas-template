@@ -44,6 +44,9 @@ provider:
         - OPTIONS
   environment:
     DATABASE_URL: ${env:DATABASE_URL, ''}
+  # Lambda VPC: set LAMBDA_VPC_SUBNET_IDS and LAMBDA_VPC_SECURITY_GROUP_IDS (comma-separated)
+  # in the environment (e.g. GitHub Actions variables). Omitted when either is unset/empty.
+  vpc: ${file(./serverless-lambda-vpc.cjs)}
 
 functions:
   api:

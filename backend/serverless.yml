@@ -51,6 +51,8 @@ provider:
 functions:
   api:
     handler: src.handler.handler
+    # Explicit so VpcConfig is always merged (provider.vpc alone can be skipped by some paths if unset).
+    vpc: ${self:provider.vpc}
     package:
       patterns:
         - "!alembic/**"
@@ -66,6 +68,7 @@ functions:
 
   migrate:
     handler: src/migrate_handler.handler
+    vpc: ${self:provider.vpc}
     timeout: 120
     memorySize: 512
     description: Alembic upgrade head (invoke after deploy)

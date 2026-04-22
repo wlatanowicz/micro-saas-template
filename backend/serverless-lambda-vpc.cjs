@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Builds provider.vpc from comma-separated env vars.
- * Use the same security group(s) as the RDS instance (see collect-gha-env.sh).
+ * Builds provider.vpc from comma-separated env vars (read at deploy/package time).
+ * Synchronous so Serverless always sees a plain object (not a Promise).
  */
 function parseCommaList(raw) {
   return String(raw || '')
@@ -11,7 +11,7 @@ function parseCommaList(raw) {
     .filter(Boolean);
 }
 
-module.exports = async () => {
+module.exports = () => {
   const subnetIds = parseCommaList(process.env.LAMBDA_VPC_SUBNET_IDS);
   const securityGroupIds = parseCommaList(process.env.LAMBDA_VPC_SECURITY_GROUP_IDS);
   if (!subnetIds.length || !securityGroupIds.length) return {};

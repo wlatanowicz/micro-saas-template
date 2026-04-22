@@ -61,6 +61,10 @@ jobs:
         working-directory: backend
 
       - name: Deploy backend stack
+        # Pass through explicitly so `npx serverless` always sees them (same as job env).
+        env:
+          LAMBDA_VPC_SUBNET_IDS: ${{ vars.LAMBDA_VPC_SUBNET_IDS }}
+          LAMBDA_VPC_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_IDS }}
         run: npx serverless@3 deploy --stage "${STAGE}" --region "${REGION}"
         working-directory: backend
 

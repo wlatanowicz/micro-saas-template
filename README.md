@@ -92,6 +92,8 @@ npx serverless@3 deploy --stage prod --region eu-central-1
 
 Or use `npm run deploy` from `backend/`, which runs **`predeploy`** and regenerates `requirements-lambda.txt` automatically.
 
+For **VPC Lambdas**, export **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** in the shell before deploy (or rely on the same GitHub **Variables** the workflow passes through). If either is unset, Serverless omits **`VpcConfig`** and functions stay outside the VPC.
+
 Then from repo root:
 
 ```bash

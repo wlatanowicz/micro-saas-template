@@ -92,7 +92,7 @@ npx serverless@3 deploy --stage prod --region eu-central-1
 
 Or use `npm run deploy` from `backend/`, which runs **`predeploy`** and regenerates `requirements-lambda.txt` automatically.
 
-For **VPC Lambdas**, export **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** in the shell before deploy (or rely on the same GitHub **Variables** the workflow passes through). If either is unset, Serverless omits **`VpcConfig`** and functions stay outside the VPC.
+For **VPC Lambdas**, set **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** as GitHub **Variables** or **Secrets** (comma-separated lists). The deploy workflow runs **`node scripts/write-lambda-vpc-config.js`**, which writes **`backend/lambda-vpc.config.json`**; Serverless reads that file via **`provider.vpc`** in **`backend/serverless.yml`**, so both **`api`** and **`migrate`** get the same **`VpcConfig`** in CloudFormation (you will see VPC on each function in the AWS console even though only **`provider.vpc`** appears in the printed YAML). Locally, run that script with the env vars exported or add **`backend/lambda-vpc.config.json`** manually (`{"subnetIds":["…"],"securityGroupIds":["…"]}`). If both lists are empty, **`VpcConfig`** is omitted—check the **Materialize Lambda VPC config** log line (**Wrote …** vs **No backend/…**).
 
 Then from repo root:
 
@@ -121,8 +121,8 @@ Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run mi
 | Variable | `AWS_REGION` | Optional; default `eu-central-1` |
 | Variable | `FRONTEND_DOMAIN_NAME` | Optional; custom SPA hostname. Use with `FRONTEND_ACM_CERT_ARN`; leave unset for default CloudFront URL only. |
 | Variable | `RDS_VPC_ID` | Optional; informational (VPC of the RDS subnet group). Not read by Serverless. |
-| Variable | `LAMBDA_VPC_SUBNET_IDS` | Optional; comma-separated subnet ids for **`api`** and **`migrate`** in a VPC (same subnets as RDS). |
-| Variable | `LAMBDA_VPC_SECURITY_GROUP_IDS` | Optional; comma-separated security group ids—typically the **same** SGs attached to the RDS instance (`collect-gha-env.sh` fills this from **`VpcSecurityGroups`**). |
+| Variable or secret | `LAMBDA_VPC_SUBNET_IDS` | Optional; comma-separated subnet ids for Lambdas in a VPC (same subnets as RDS). Variables take precedence over a secret with the same name. |
+| Variable or secret | `LAMBDA_VPC_SECURITY_GROUP_IDS` | Optional; comma-separated security group ids—typically the **same** SGs attached to the RDS instance (`collect-gha-env.sh` fills this from **`VpcSecurityGroups`**). |
 | Secret | `CLOUDFLARE_API_TOKEN` | Optional; DNS:Edit for zone |
 | Secret | `CLOUDFLARE_ZONE_ID` | Optional; or use `CLOUDFLARE_ZONE_NAME` |
 | Secret | `CLOUDFLARE_ZONE_NAME` | Optional; e.g. `example.com` |

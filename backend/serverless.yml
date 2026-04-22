@@ -44,15 +44,12 @@ provider:
         - OPTIONS
   environment:
     DATABASE_URL: ${env:DATABASE_URL, ''}
-  # Lambda VPC: LAMBDA_VPC_SUBNET_IDS + LAMBDA_VPC_SECURITY_GROUP_IDS (comma-separated).
-  # collect-gha-env.sh fills both from the selected RDS instance (RDS subnet group + instance SGs).
+  # Applies to all Lambdas (api + migrate). See serverless-lambda-vpc.cjs + lambda-vpc.config.json / LAMBDA_VPC_* env.
   vpc: ${file(./serverless-lambda-vpc.cjs)}
 
 functions:
   api:
     handler: src.handler.handler
-    # Explicit so VpcConfig is always merged (provider.vpc alone can be skipped by some paths if unset).
-    vpc: ${self:provider.vpc}
     package:
       patterns:
         - "!alembic/**"
@@ -68,7 +65,6 @@ functions:
 
   migrate:
     handler: src/migrate_handler.handler
-    vpc: ${self:provider.vpc}
     timeout: 120
     memorySize: 512
     description: Alembic upgrade head (invoke after deploy)

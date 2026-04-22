@@ -20,8 +20,8 @@ jobs:
       FRONTEND_ACM_CERT_ARN: ${{ secrets.FRONTEND_ACM_CERT_ARN }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
       RDS_VPC_ID: ${{ vars.RDS_VPC_ID }}
-      LAMBDA_VPC_SUBNET_IDS: ${{ vars.LAMBDA_VPC_SUBNET_IDS }}
-      LAMBDA_VPC_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_IDS }}
+      LAMBDA_VPC_SUBNET_IDS: ${{ vars.LAMBDA_VPC_SUBNET_IDS || secrets.LAMBDA_VPC_SUBNET_IDS }}
+      LAMBDA_VPC_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_IDS || secrets.LAMBDA_VPC_SECURITY_GROUP_IDS }}
 
     steps:
       - name: Checkout
@@ -60,11 +60,14 @@ jobs:
         run: npm ci
         working-directory: backend
 
-      - name: Deploy backend stack
-        # Pass through explicitly so `npx serverless` always sees them (same as job env).
+      # Serverless variable resolution + npx sometimes did not see job env; materialize JSON from repo Variables.
+      - name: Materialize Lambda VPC config
         env:
-          LAMBDA_VPC_SUBNET_IDS: ${{ vars.LAMBDA_VPC_SUBNET_IDS }}
-          LAMBDA_VPC_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_IDS }}
+          LAMBDA_VPC_SUBNET_IDS: ${{ vars.LAMBDA_VPC_SUBNET_IDS || secrets.LAMBDA_VPC_SUBNET_IDS }}
+          LAMBDA_VPC_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_IDS || secrets.LAMBDA_VPC_SECURITY_GROUP_IDS }}
+        run: node scripts/write-lambda-vpc-config.js
+
+      - name: Deploy backend stack
         run: npx serverless@3 deploy --stage "${STAGE}" --region "${REGION}"
         working-directory: backend
 

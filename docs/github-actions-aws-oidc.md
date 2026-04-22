@@ -109,6 +109,7 @@ At minimum, the role must allow:
 - **S3** — bucket and object operations for the Serverless-managed buckets and `s3 sync` targets.  
 - **CloudFront** — `CreateInvalidation` (and read distribution metadata if your scripts list distributions).  
 - **CloudWatch Logs** — log groups for Lambda.  
+- **EC2 / VPC** — if you use the template’s **managed Lambda↔RDS** wiring (`RDS_VPC_ID`, `RDS_SECURITY_GROUP_ID`, `LAMBDA_VPC_SUBNET_IDS`): create/revoke security groups, **`ec2:AuthorizeSecurityGroupIngress`** / **`ec2:RevokeSecurityGroupIngress`** on the **RDS instance security group** (the deploy role must be allowed to add the rule that opens **TCP 5432** from the stack-created Lambda ENI group).  
 - **ACM** — if Serverless or CloudFront integration reads certificate metadata in your region; CloudFront custom certs are in **us-east-1**.  
 - **STS** — `GetCallerIdentity` is commonly used by tooling.
 

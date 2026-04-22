@@ -52,23 +52,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.REGION }}
 
-      - name: Export Lambda requirements
-        run: uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements-lambda.txt
-        working-directory: backend
-
       - name: Install backend npm dependencies
         run: npm ci
         working-directory: backend
 
-      # Serverless variable resolution + npx sometimes did not see job env; materialize JSON from repo Variables.
-      - name: Materialize Lambda VPC config
-        env:
-          LAMBDA_VPC_SUBNET_IDS: ${{ vars.LAMBDA_VPC_SUBNET_IDS || secrets.LAMBDA_VPC_SUBNET_IDS }}
-          LAMBDA_VPC_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_IDS || secrets.LAMBDA_VPC_SECURITY_GROUP_IDS }}
-        run: node scripts/write-lambda-vpc-config.js
-
+      # predeploy: export requirements + write-lambda-vpc-config (job env includes LAMBDA_VPC_* from vars/secrets).
       - name: Deploy backend stack
-        run: npx serverless@3 deploy --stage "${STAGE}" --region "${REGION}"
+        run: npm run deploy -- --stage "${STAGE}" --region "${REGION}"
         working-directory: backend
 
       - name: Run database migrations (Lambda)

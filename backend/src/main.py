@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from src.db import get_database_url, session_scope
-from src.models import Item
+from src.apps.demo.models import Item
+from src.utils.db import get_database_url, session_scope
 
 app = FastAPI(title="Micro-SaaS API", version="0.1.0")
 

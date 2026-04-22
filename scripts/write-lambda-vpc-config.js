@@ -2,8 +2,9 @@
 'use strict';
 /**
  * Writes backend/lambda-vpc.config.json from LAMBDA_VPC_SUBNET_IDS and
- * LAMBDA_VPC_SECURITY_GROUP_IDS (comma-separated). Used in CI so Serverless
- * reads VPC ids from disk (reliable); removes the file when either list is empty.
+ * LAMBDA_VPC_SECURITY_GROUP_IDS (comma-separated). Serverless loads it via
+ * provider.vpc in backend/serverless.yml; removes the file when either list is empty
+ * so deploy falls back to lambda-vpc.no-vpc.json (no VPC).
  */
 const fs = require('fs');
 const path = require('path');

@@ -44,8 +44,10 @@ provider:
         - OPTIONS
   environment:
     DATABASE_URL: ${env:DATABASE_URL, ''}
-  # Applies to all Lambdas (api + migrate). See serverless-lambda-vpc.cjs + lambda-vpc.config.json / LAMBDA_VPC_* env.
-  vpc: ${file(./serverless-lambda-vpc.cjs)}
+  # VPC for all Lambdas. Prefer editing lambda-vpc.config.json (see lambda-vpc.config.example.json), or replace
+  # this line with a literal block: vpc: { subnetIds: [...], securityGroupIds: [...] }.
+  # When lambda-vpc.config.json is absent, lambda-vpc.no-vpc.json (false) disables VPC.
+  vpc: ${file(./lambda-vpc.config.json), file(./lambda-vpc.no-vpc.json)}
 
 functions:
   api:

@@ -92,7 +92,9 @@ npx serverless@3 deploy --stage prod --region eu-central-1
 
 Or use `npm run deploy` from `backend/`, which runs **`predeploy`** and regenerates `requirements-lambda.txt` automatically.
 
-For **VPC Lambdas**, set **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** as GitHub **Variables** or **Secrets** (comma-separated lists). The deploy workflow runs **`node scripts/write-lambda-vpc-config.js`**, which writes **`backend/lambda-vpc.config.json`**; Serverless reads that file via **`provider.vpc`** in **`backend/serverless.yml`**, so both **`api`** and **`migrate`** get the same **`VpcConfig`** in CloudFormation (you will see VPC on each function in the AWS console even though only **`provider.vpc`** appears in the printed YAML). Locally, run that script with the env vars exported or add **`backend/lambda-vpc.config.json`** manually (`{"subnetIds":["…"],"securityGroupIds":["…"]}`). If both lists are empty, **`VpcConfig`** is omitted—check the **Materialize Lambda VPC config** log line (**Wrote …** vs **No backend/…**).
+For **VPC Lambdas**, set subnets and security groups in **`backend/lambda-vpc.config.json`** (copy **`backend/lambda-vpc.config.example.json`**). **`backend/serverless.yml`** uses **`provider.vpc: ${file(./lambda-vpc.config.json), file(./lambda-vpc.no-vpc.json)}`**: if the config file is missing, **`lambda-vpc.no-vpc.json`** is the boolean **`false`**, which turns VPC off (Serverless previously dropped **`VpcConfig`** when a resolver returned **`{}`**, because **`SubnetIds` / `SecurityGroupIds`** were undefined). Alternatively, replace that **`provider.vpc`** line with a **literal** YAML block (`subnetIds` / `securityGroupIds` lists); comma-separated strings in env cannot become YAML lists without a script or plugin.
+
+In **GitHub Actions**, set **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** as **Variables** or **Secrets** (comma-separated); **Deploy** runs **`node scripts/write-lambda-vpc-config.js`**, which writes or deletes **`lambda-vpc.config.json`**. Check the **Materialize Lambda VPC config** log (**Wrote …** vs **No backend/…**).
 
 Then from repo root:
 

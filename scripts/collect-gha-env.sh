@@ -170,6 +170,7 @@ print(f'postgresql://{user}:{password}@{addr}:{port}/{dbname}')
 }
 
 : "${DATABASE_URL:=}"
+: "${JWT_SECRET:=}"
 
 echo ""
 echo "=== DATABASE_URL ==="
@@ -239,6 +240,24 @@ if ! $SKIP_DB_WIZARD; then
       fi
     fi
   fi
+fi
+
+echo ""
+echo "=== JWT (API auth) ==="
+echo "JWT_SECRET is required for /api/auth when DATABASE_URL is set (HS256 signing key; store as a GitHub Actions secret)."
+if [[ -n "${JWT_SECRET}" ]]; then
+  echo "JWT_SECRET is already set in .env.gha (value not shown)."
+else
+  echo "JWT_SECRET is not set."
+fi
+read -rp "JWT_SECRET [Enter to keep, g=generate 48-byte url-safe]: " jresp
+if [[ "${jresp}" == "g" ]]; then
+  JWT_SECRET="$(
+    python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+  )"
+  echo "Generated a new secret (shown once above; it will be written to ${OUT_FILE} unless -n)."
+else
+  JWT_SECRET="${jresp:-$JWT_SECRET}"
 fi
 
 echo ""
@@ -477,6 +496,7 @@ CLOUDFLARE_ZONE_NAME="${NEW_CFZN:-$CLOUDFLARE_ZONE_NAME}"
 write_env_file() {
   local target="$1"
   DATABASE_URL="$DATABASE_URL" \
+    JWT_SECRET="$JWT_SECRET" \
     FRONTEND_ACM_CERT_ARN="$FRONTEND_ACM_CERT_ARN" \
     AWS_ROLE_TO_ASSUME="$AWS_ROLE_TO_ASSUME" \
     CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
@@ -505,6 +525,7 @@ lines = [
     "",
     "# --- Secrets ---",
     f"DATABASE_URL={shlex.quote(os.environ.get('DATABASE_URL', ''))}",
+    f"JWT_SECRET={shlex.quote(os.environ.get('JWT_SECRET', ''))}",
     f"FRONTEND_ACM_CERT_ARN={shlex.quote(os.environ.get('FRONTEND_ACM_CERT_ARN', ''))}",
     f"AWS_ROLE_TO_ASSUME={shlex.quote(os.environ.get('AWS_ROLE_TO_ASSUME', ''))}",
     f"CLOUDFLARE_API_TOKEN={shlex.quote(os.environ.get('CLOUDFLARE_API_TOKEN', ''))}",

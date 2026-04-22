@@ -17,6 +17,7 @@ jobs:
       STAGE: prod
       REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
       FRONTEND_ACM_CERT_ARN: ${{ secrets.FRONTEND_ACM_CERT_ARN }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
       RDS_VPC_ID: ${{ vars.RDS_VPC_ID }}

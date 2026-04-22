@@ -8,9 +8,12 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from src.apps.demo.models import Item
-from src.utils.db import get_database_url, session_scope
+from src.apps.users.routes import router as auth_router
+from src.utils.db import get_database_url
+from src.utils.deps import get_db_session
 
 app = FastAPI(title="Micro-SaaS API", version="0.1.0")
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,14 +22,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-def get_db_session():
-    if not get_database_url():
-        yield None
-        return
-    with session_scope() as session:
-        yield session
 
 
 class ItemCreate(BaseModel):

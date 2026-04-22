@@ -20,6 +20,40 @@ body {
   padding: 2rem 1.25rem;
 }
 
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.app-header__user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.app-header__user .user-meta {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.muted {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
 h1 {
   font-size: 1.5rem;
   font-weight: 600;
@@ -51,4 +85,62 @@ ul {
 
 li {
   margin-bottom: 0.35rem;
+}
+
+.auth-form label {
+  display: block;
+  font-size: 0.85rem;
+  color: #334155;
+  margin-top: 0.75rem;
+}
+.auth-form label:first-of-type {
+  margin-top: 0.5rem;
+}
+
+.auth-form input {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin-top: 0.3rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.35rem;
+  font: inherit;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.form-actions button,
+.btn-text {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  border-radius: 0.35rem;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.form-actions button:hover,
+.btn-text:hover {
+  background: #f1f5f9;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: #2563eb;
+  padding: 0.2rem 0.35rem;
+  text-decoration: underline;
+}
+
+.btn-text:disabled,
+.form-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

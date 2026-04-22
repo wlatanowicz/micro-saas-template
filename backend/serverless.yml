@@ -44,6 +44,7 @@ provider:
         - OPTIONS
   environment:
     DATABASE_URL: ${env:DATABASE_URL, ''}
+    JWT_SECRET: ${env:JWT_SECRET, ''}
   # Lambda VPC (optional): env vars below. Use npm run deploy / npm run print (generates serverless.deploy.yml).
   # LAMBDA_VPC_START
   vpc:

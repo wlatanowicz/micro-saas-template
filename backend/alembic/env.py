@@ -5,6 +5,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 from src.apps.demo.models import Item  # noqa: F401 — register metadata
+from src.apps.users.models import User  # noqa: F401 — register metadata
 
 config = context.config
 if config.config_file_name is not None:

@@ -56,7 +56,9 @@ jobs:
         working-directory: backend
 
       - name: Validate Serverless config
-        run: npx serverless@3 print >/dev/null
+        run: |
+          node ../scripts/prepare-backend-serverless-deploy-config.js
+          npx serverless@3 print --config serverless.deploy.yml >/dev/null
         working-directory: backend
 
       - name: Install frontend dependencies

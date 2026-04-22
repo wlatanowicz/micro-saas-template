@@ -1,4 +1,0 @@
-{
-  "subnetIds": ["subnet-aaaaaaaaaaaaaaaaa", "subnet-bbbbbbbbbbbbbbbbb"],
-  "securityGroupIds": ["sg-ccccccccccccccccc"]
-}

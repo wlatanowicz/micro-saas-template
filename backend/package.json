@@ -5,8 +5,9 @@
   "description": "Serverless Framework wrapper for Python Lambda packaging",
   "scripts": {
     "export-lambda-reqs": "uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements-lambda.txt",
-    "predeploy": "npm run export-lambda-reqs && node ../scripts/write-lambda-vpc-config.js",
-    "deploy": "serverless deploy",
+    "predeploy": "npm run export-lambda-reqs && node ../scripts/prepare-backend-serverless-deploy-config.js",
+    "deploy": "serverless deploy --config serverless.deploy.yml",
+    "print": "node ../scripts/prepare-backend-serverless-deploy-config.js && serverless print --config serverless.deploy.yml",
     "remove": "serverless remove"
   },
   "devDependencies": {

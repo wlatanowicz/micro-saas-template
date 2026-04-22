@@ -20,7 +20,7 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 1. In `backend/serverless.yml`, set `service:` to your stack name prefix (default stack is `{service}-{stage}`).
 2. Optional: set **`FRONTEND_DOMAIN_NAME`** and **`FRONTEND_ACM_CERT_ARN`** (us-east-1) together when deploying. The certificate’s SAN must include that hostname; otherwise CloudFront returns an invalid CNAME error. If you omit either, the stack uses the default **\*.cloudfront.net** URL only.
-3. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database. For **private RDS**, set **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** (comma-separated). **`collect-gha-env.sh`** fills both from the selected instance: subnets from the DB subnet group, security groups from **`VpcSecurityGroups`** (the same SGs the database already uses). Lambdas are placed in those SGs; add a **self-referencing inbound rule** on that SG for PostgreSQL (or allow the SG as source) if it does not already allow clients in the same group.
+3. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database. For **private RDS**, set **`LAMBDA_VPC_SUBNET_ID_1`**, **`LAMBDA_VPC_SUBNET_ID_2`**, **`LAMBDA_VPC_SUBNET_ID_3`**, and **`LAMBDA_VPC_SECURITY_GROUP_ID`** (see `provider.vpc` in **`backend/serverless.yml`**). **`collect-gha-env.sh`** fills them from the selected instance: the first three subnets from the DB subnet group, the **first** security group from **`VpcSecurityGroups`**. Lambdas use that SG; add a **self-referencing inbound rule** for PostgreSQL (or allow the SG as source) if it does not already allow clients in the same group.
 4. Copy `frontend/.env.example` to `frontend/.env` for local dev and set `VITE_API_BASE_URL` to your API URL (or local server).
 5. Configure GitHub **Actions** secrets and variables (below). Grant the OIDC role **`lambda:InvokeFunction`** on the **`migrate`** function (see [docs/github-actions-aws-oidc.md](docs/github-actions-aws-oidc.md)).
 
@@ -78,23 +78,24 @@ From `backend/` (requires AWS credentials and env vars as in CI):
 
 ```bash
 npm ci
-uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements-lambda.txt
 export DATABASE_URL='postgresql://...'
-# Optional: private RDS — same subnets + SGs as the RDS instance (from collect-gha-env or by hand):
-# export LAMBDA_VPC_SUBNET_IDS='subnet-aaa,subnet-bbb'
-# export LAMBDA_VPC_SECURITY_GROUP_IDS='sg-rds...'
+# Optional: private RDS — set all four or leave all unset (same subnets / SG as collect-gha-env suggests):
+# export LAMBDA_VPC_SUBNET_ID_1='subnet-...'
+# export LAMBDA_VPC_SUBNET_ID_2='subnet-...'
+# export LAMBDA_VPC_SUBNET_ID_3='subnet-...'
+# export LAMBDA_VPC_SECURITY_GROUP_ID='sg-...'
 # export RDS_VPC_ID='vpc-...'   # optional; informational in .env.gha
 # Optional custom SPA hostname (set BOTH, cert must cover the hostname in us-east-1):
 # export FRONTEND_ACM_CERT_ARN='arn:aws:acm:us-east-1:...:certificate/...'
 # export FRONTEND_DOMAIN_NAME='app.yourdomain.com'
-npx serverless@3 deploy --stage prod --region eu-central-1
+npm run deploy -- --stage prod --region eu-central-1
 ```
 
-Or use `npm run deploy` from `backend/`, which runs **`predeploy`**: regenerates `requirements-lambda.txt` and runs **`node ../scripts/write-lambda-vpc-config.js`** (uses **`LAMBDA_VPC_*`** env if set, otherwise removes `lambda-vpc.config.json` so deploy falls back to no VPC).
+**`npm run deploy`** runs **`predeploy`** (exports **`requirements-lambda.txt`**, then **`prepare-backend-serverless-deploy-config.js`**), then **`serverless deploy --config serverless.deploy.yml`**. The prepare step writes **`backend/serverless.deploy.yml`** (gitignored) from **`backend/serverless.yml`**: if all four **`LAMBDA_VPC_*`** env vars are set, the **`vpc`** block is kept; if all are empty, it becomes **`vpc: false`**. Partial values are an error.
 
-For **VPC Lambdas**, set subnets and security groups in **`backend/lambda-vpc.config.json`** (copy **`backend/lambda-vpc.config.example.json`**). **`backend/serverless.yml`** uses **`provider.vpc: ${file(./lambda-vpc.config.json), file(./lambda-vpc.no-vpc.json)}`**: if the config file is missing, **`lambda-vpc.no-vpc.json`** is the boolean **`false`**, which turns VPC off (Serverless previously dropped **`VpcConfig`** when a resolver returned **`{}`**, because **`SubnetIds` / `SecurityGroupIds`** were undefined). Alternatively, replace that **`provider.vpc`** line with a **literal** YAML block (`subnetIds` / `securityGroupIds` lists); comma-separated strings in env cannot become YAML lists without a script or plugin.
+The **`vpc`** subtree (env placeholders) lives in **`serverless.yml`** between **`# LAMBDA_VPC_START`** / **`# LAMBDA_VPC_END`**. Use **`npm run print`** from **`backend/`** to validate resolution (it runs prepare first).
 
-In **GitHub Actions**, set **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** as **Variables** or **Secrets** (comma-separated). **Deploy backend stack** runs **`npm run deploy`**, whose **`predeploy`** hook runs **`write-lambda-vpc-config.js`** (writes or deletes **`lambda-vpc.config.json`**). Watch that step’s output (**Wrote …** vs **No backend/…** on stderr).
+In **GitHub Actions**, set **`LAMBDA_VPC_SUBNET_ID_1`** … **`LAMBDA_VPC_SUBNET_ID_3`** and **`LAMBDA_VPC_SECURITY_GROUP_ID`** as **Variables** or **Secrets** (one id each). Variables take precedence over a secret with the same name.
 
 Then from repo root:
 
@@ -109,7 +110,7 @@ Scripts accept an optional third argument: **CloudFormation stack name** (defaul
 
 ### `CI` (`.github/workflows/ci.yml`)
 
-Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `requirements-lambda.txt`, Serverless `print`, frontend build.
+Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `requirements-lambda.txt`, **prepare** + Serverless `print` on **`serverless.deploy.yml`**, frontend build.
 
 ### `Deploy` (`.github/workflows/deploy.yml`)
 
@@ -123,8 +124,10 @@ Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run mi
 | Variable | `AWS_REGION` | Optional; default `eu-central-1` |
 | Variable | `FRONTEND_DOMAIN_NAME` | Optional; custom SPA hostname. Use with `FRONTEND_ACM_CERT_ARN`; leave unset for default CloudFront URL only. |
 | Variable | `RDS_VPC_ID` | Optional; informational (VPC of the RDS subnet group). Not read by Serverless. |
-| Variable or secret | `LAMBDA_VPC_SUBNET_IDS` | Optional; comma-separated subnet ids for Lambdas in a VPC (same subnets as RDS). Variables take precedence over a secret with the same name. |
-| Variable or secret | `LAMBDA_VPC_SECURITY_GROUP_IDS` | Optional; comma-separated security group ids—typically the **same** SGs attached to the RDS instance (`collect-gha-env.sh` fills this from **`VpcSecurityGroups`**). |
+| Variable or secret | `LAMBDA_VPC_SUBNET_ID_1` | Optional; first subnet id for Lambdas in a VPC (with `_2`, `_3`, set all three or none). |
+| Variable or secret | `LAMBDA_VPC_SUBNET_ID_2` | Optional; second subnet id. |
+| Variable or secret | `LAMBDA_VPC_SUBNET_ID_3` | Optional; third subnet id. |
+| Variable or secret | `LAMBDA_VPC_SECURITY_GROUP_ID` | Optional; security group id (typically the RDS instance’s primary SG). |
 | Secret | `CLOUDFLARE_API_TOKEN` | Optional; DNS:Edit for zone |
 | Secret | `CLOUDFLARE_ZONE_ID` | Optional; or use `CLOUDFLARE_ZONE_NAME` |
 | Secret | `CLOUDFLARE_ZONE_NAME` | Optional; e.g. `example.com` |
@@ -139,7 +142,7 @@ With credentials available (e.g. **`AWS_PROFILE`**), run:
 AWS_PROFILE=your-profile ./scripts/collect-gha-env.sh
 ```
 
-The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1**, and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend domain** / **Cloudflare** values. When you build **`DATABASE_URL`** from an RDS instance, it fills **`RDS_VPC_ID`**, **`LAMBDA_VPC_SUBNET_IDS`**, and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** (all RDS **`VpcSecurityGroups`**). It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. If **`.env.gha` already exists**, its values are loaded first and used as defaults (press **Enter** to keep each field, **`k`** to keep **DATABASE_URL** / ACM). Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
+The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1**, and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend domain** / **Cloudflare** values. When you build **`DATABASE_URL`** from an RDS instance, it fills **`RDS_VPC_ID`**, **`LAMBDA_VPC_SUBNET_ID_1..3`** (first three subnets of the DB subnet group), and **`LAMBDA_VPC_SECURITY_GROUP_ID`** (first **`VpcSecurityGroup`** on the instance). It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. If **`.env.gha` already exists**, its values are loaded first and used as defaults (press **Enter** to keep each field, **`k`** to keep **DATABASE_URL** / ACM). Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
 
 Requires **AWS CLI**, **jq**, and **Python 3**. The generated **`.env.gha`** uses **`# --- Secrets ---`** and **`# --- Variables ---`** section headers; **`push-gha-env.sh`** uploads every non-empty line under each block to GitHub **secrets** or **variables**. Run **`./scripts/push-gha-env.sh`** (needs **`gh`** and **Python 3**; **`gh`** with **repo** scope). Use **`./scripts/push-gha-env.sh -n`** first to preview. The **master password** and **OIDC role ARN** are always prompted (not returned by AWS APIs).
 
@@ -147,7 +150,7 @@ Optional custom CloudFront hostname is controlled only by environment variables 
 
 ## Lambda packaging notes
 
-- **uv** produces `backend/requirements-lambda.txt` for **`serverless-python-requirements`** (`uv export --frozen --no-dev --no-emit-project --no-hashes`). That file is gitignored; CI and `npm run predeploy` create it before deploy. **`package.individually: true`**: the **`api`** function excludes `alembic/` and **`migrate_handler.py`**; the **`migrate`** function ships `alembic/` + `alembic.ini` plus app models. Both bundles still include shared runtime wheels (including Alembic) from the same export.
+- **uv** produces `backend/requirements-lambda.txt` for **`serverless-python-requirements`** (`uv export --frozen --no-dev --no-emit-project --no-hashes`). That file is gitignored; CI and `npm run predeploy` create it before deploy. **`prepare-backend-serverless-deploy-config.js`** writes **`backend/serverless.deploy.yml`** (gitignored) from **`serverless.yml`** and **`LAMBDA_VPC_*`** env. **`package.individually: true`**: the **`api`** function excludes `alembic/` and **`migrate_handler.py`**; the **`migrate`** function ships `alembic/` + `alembic.ini` plus app models. Both bundles still include shared runtime wheels (including Alembic) from the same export.
 - `serverless-python-requirements` bundles those dependencies; `slim: true` keeps the zip smaller. On macOS, `dockerizePip: non-linux` uses Docker for Linux-compatible wheels when needed.
 - Lambda runtime already includes `boto3`; it is listed under `noDeploy` to avoid duplication.
 

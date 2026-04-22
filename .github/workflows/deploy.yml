@@ -20,8 +20,10 @@ jobs:
       FRONTEND_ACM_CERT_ARN: ${{ secrets.FRONTEND_ACM_CERT_ARN }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
       RDS_VPC_ID: ${{ vars.RDS_VPC_ID }}
-      LAMBDA_VPC_SUBNET_IDS: ${{ vars.LAMBDA_VPC_SUBNET_IDS || secrets.LAMBDA_VPC_SUBNET_IDS }}
-      LAMBDA_VPC_SECURITY_GROUP_IDS: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_IDS || secrets.LAMBDA_VPC_SECURITY_GROUP_IDS }}
+      LAMBDA_VPC_SUBNET_ID_1: ${{ vars.LAMBDA_VPC_SUBNET_ID_1 || secrets.LAMBDA_VPC_SUBNET_ID_1 }}
+      LAMBDA_VPC_SUBNET_ID_2: ${{ vars.LAMBDA_VPC_SUBNET_ID_2 || secrets.LAMBDA_VPC_SUBNET_ID_2 }}
+      LAMBDA_VPC_SUBNET_ID_3: ${{ vars.LAMBDA_VPC_SUBNET_ID_3 || secrets.LAMBDA_VPC_SUBNET_ID_3 }}
+      LAMBDA_VPC_SECURITY_GROUP_ID: ${{ vars.LAMBDA_VPC_SECURITY_GROUP_ID || secrets.LAMBDA_VPC_SECURITY_GROUP_ID }}
 
     steps:
       - name: Checkout
@@ -56,7 +58,7 @@ jobs:
         run: npm ci
         working-directory: backend
 
-      # predeploy: export requirements + write-lambda-vpc-config (job env includes LAMBDA_VPC_* from vars/secrets).
+      # predeploy: export requirements + serverless.deploy.yml (job env includes LAMBDA_VPC_* from vars/secrets).
       - name: Deploy backend stack
         run: npm run deploy -- --stage "${STAGE}" --region "${REGION}"
         working-directory: backend

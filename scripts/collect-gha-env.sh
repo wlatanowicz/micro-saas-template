@@ -100,18 +100,42 @@ fi
 REGION="${REGION:-eu-central-1}"
 
 : "${RDS_VPC_ID:=}"
-: "${LAMBDA_VPC_SUBNET_IDS:=}"
-: "${LAMBDA_VPC_SECURITY_GROUP_IDS:=}"
+: "${LAMBDA_VPC_SUBNET_ID_1:=}"
+: "${LAMBDA_VPC_SUBNET_ID_2:=}"
+: "${LAMBDA_VPC_SUBNET_ID_3:=}"
+: "${LAMBDA_VPC_SECURITY_GROUP_ID:=}"
 
 apply_rds_network_from_instance() {
   local identifier="$1"
-  local json
+  local json subnets_csv sgs_csv
   json="$(aws rds describe-db-instances "${PROFILE_ARGS[@]}" --region "$REGION" \
     --db-instance-identifier "$identifier" --output json 2>/dev/null || echo '{}')"
   RDS_VPC_ID="$(jq -r '(.DBInstances[0] // {}) | (.DBSubnetGroup // {}) | .VpcId // empty' <<< "$json")"
-  LAMBDA_VPC_SUBNET_IDS="$(jq -r '(.DBInstances[0] // {}) | (.DBSubnetGroup // {}) | .Subnets // [] | map(.SubnetIdentifier) | join(",")' <<< "$json")"
-  # Same security group(s) already attached to the RDS instance (comma-separated if several).
-  LAMBDA_VPC_SECURITY_GROUP_IDS="$(jq -r '(.DBInstances[0] // {}) | (.VpcSecurityGroups // []) | map(.VpcSecurityGroupId) | join(",")' <<< "$json")"
+  subnets_csv="$(jq -r '(.DBInstances[0] // {}) | (.DBSubnetGroup // {}) | .Subnets // [] | map(.SubnetIdentifier) | join(",")' <<< "$json")"
+  sgs_csv="$(jq -r '(.DBInstances[0] // {}) | (.VpcSecurityGroups // []) | map(.VpcSecurityGroupId) | join(",")' <<< "$json")"
+  LAMBDA_VPC_SUBNET_ID_1=""
+  LAMBDA_VPC_SUBNET_ID_2=""
+  LAMBDA_VPC_SUBNET_ID_3=""
+  LAMBDA_VPC_SECURITY_GROUP_ID=""
+  if [[ -n "$subnets_csv" ]]; then
+    local _idx=0
+    while IFS= read -r _sub; do
+      [[ -z "$_sub" ]] && continue
+      case "$_idx" in
+        0) LAMBDA_VPC_SUBNET_ID_1="$_sub" ;;
+        1) LAMBDA_VPC_SUBNET_ID_2="$_sub" ;;
+        2) LAMBDA_VPC_SUBNET_ID_3="$_sub" ;;
+      esac
+      _idx=$((_idx + 1))
+    done < <(echo "$subnets_csv" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  fi
+  if [[ -n "$sgs_csv" ]]; then
+    while IFS= read -r _sg; do
+      [[ -z "$_sg" ]] && continue
+      LAMBDA_VPC_SECURITY_GROUP_ID="$_sg"
+      break
+    done < <(echo "$sgs_csv" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  fi
 }
 
 build_database_url_from_rds() {
@@ -203,7 +227,7 @@ if ! $SKIP_DB_WIZARD; then
       if [[ -z "$dbpass" ]]; then
         echo "Password empty; keeping or setting DATABASE_URL manually." >&2
         apply_rds_network_from_instance "$RID"
-        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_IDS:-?} sg=${LAMBDA_VPC_SECURITY_GROUP_IDS:-?}"
+        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_ID_1:-?},${LAMBDA_VPC_SUBNET_ID_2:-?},${LAMBDA_VPC_SUBNET_ID_3:-?} sg=${LAMBDA_VPC_SECURITY_GROUP_ID:-?}"
         read -rp "DATABASE_URL [Enter to keep existing]: " NEW_DB_URL
         DATABASE_URL="${NEW_DB_URL:-$DATABASE_URL}"
       else
@@ -211,7 +235,7 @@ if ! $SKIP_DB_WIZARD; then
         DATABASE_URL="$(build_database_url_from_rds "$RID" "$dbname")"
         unset _COLLECT_DB_PASS
         apply_rds_network_from_instance "$RID"
-        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_IDS:-?} sg=${LAMBDA_VPC_SECURITY_GROUP_IDS:-?}"
+        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_ID_1:-?},${LAMBDA_VPC_SUBNET_ID_2:-?},${LAMBDA_VPC_SUBNET_ID_3:-?} sg=${LAMBDA_VPC_SECURITY_GROUP_ID:-?}"
       fi
     fi
   fi
@@ -219,15 +243,21 @@ fi
 
 echo ""
 echo "=== Lambda VPC (optional; private RDS) ==="
-echo "Lambdas use LAMBDA_VPC_SUBNET_IDS + LAMBDA_VPC_SECURITY_GROUP_IDS (same SGs as the RDS instance when filled from RDS)."
+echo "Lambdas use LAMBDA_VPC_SUBNET_ID_1..3 and LAMBDA_VPC_SECURITY_GROUP_ID (first RDS subnet group / first instance SG when filled from RDS)."
 echo "Ensure the RDS security group allows DB traffic from itself (self-referencing rule) if Lambdas share that SG."
 [[ -n "${RDS_VPC_ID}" ]] && echo "RDS_VPC_ID (from RDS or .env.gha; informational):" && printf '%s\n' "$RDS_VPC_ID"
-[[ -n "${LAMBDA_VPC_SUBNET_IDS}" ]] && echo "LAMBDA_VPC_SUBNET_IDS (from RDS or .env.gha):" && printf '%s\n' "$LAMBDA_VPC_SUBNET_IDS"
-[[ -n "${LAMBDA_VPC_SECURITY_GROUP_IDS}" ]] && echo "LAMBDA_VPC_SECURITY_GROUP_IDS (RDS instance SGs or .env.gha):" && printf '%s\n' "$LAMBDA_VPC_SECURITY_GROUP_IDS"
-read -rp "LAMBDA_VPC_SUBNET_IDS [Enter to keep]: " NEW_SUB
-LAMBDA_VPC_SUBNET_IDS="${NEW_SUB:-$LAMBDA_VPC_SUBNET_IDS}"
-read -rp "LAMBDA_VPC_SECURITY_GROUP_IDS (comma-separated; usually same as RDS) [Enter to keep]: " NEW_SG
-LAMBDA_VPC_SECURITY_GROUP_IDS="${NEW_SG:-$LAMBDA_VPC_SECURITY_GROUP_IDS}"
+[[ -n "${LAMBDA_VPC_SUBNET_ID_1}" ]] && echo "LAMBDA_VPC_SUBNET_ID_1 (from RDS or .env.gha):" && printf '%s\n' "$LAMBDA_VPC_SUBNET_ID_1"
+[[ -n "${LAMBDA_VPC_SUBNET_ID_2}" ]] && echo "LAMBDA_VPC_SUBNET_ID_2:" && printf '%s\n' "$LAMBDA_VPC_SUBNET_ID_2"
+[[ -n "${LAMBDA_VPC_SUBNET_ID_3}" ]] && echo "LAMBDA_VPC_SUBNET_ID_3:" && printf '%s\n' "$LAMBDA_VPC_SUBNET_ID_3"
+[[ -n "${LAMBDA_VPC_SECURITY_GROUP_ID}" ]] && echo "LAMBDA_VPC_SECURITY_GROUP_ID:" && printf '%s\n' "$LAMBDA_VPC_SECURITY_GROUP_ID"
+read -rp "LAMBDA_VPC_SUBNET_ID_1 [Enter to keep]: " NEW_S1
+LAMBDA_VPC_SUBNET_ID_1="${NEW_S1:-$LAMBDA_VPC_SUBNET_ID_1}"
+read -rp "LAMBDA_VPC_SUBNET_ID_2 [Enter to keep]: " NEW_S2
+LAMBDA_VPC_SUBNET_ID_2="${NEW_S2:-$LAMBDA_VPC_SUBNET_ID_2}"
+read -rp "LAMBDA_VPC_SUBNET_ID_3 [Enter to keep]: " NEW_S3
+LAMBDA_VPC_SUBNET_ID_3="${NEW_S3:-$LAMBDA_VPC_SUBNET_ID_3}"
+read -rp "LAMBDA_VPC_SECURITY_GROUP_ID (usually same as RDS) [Enter to keep]: " NEW_SG
+LAMBDA_VPC_SECURITY_GROUP_ID="${NEW_SG:-$LAMBDA_VPC_SECURITY_GROUP_ID}"
 read -rp "RDS_VPC_ID (informational) [Enter to keep]: " NEW_VPC
 RDS_VPC_ID="${NEW_VPC:-$RDS_VPC_ID}"
 
@@ -455,8 +485,10 @@ write_env_file() {
     AWS_REGION="$REGION" \
     FRONTEND_DOMAIN_NAME="${FRONTEND_DOMAIN_NAME:-}" \
     RDS_VPC_ID="${RDS_VPC_ID:-}" \
-    LAMBDA_VPC_SUBNET_IDS="${LAMBDA_VPC_SUBNET_IDS:-}" \
-    LAMBDA_VPC_SECURITY_GROUP_IDS="${LAMBDA_VPC_SECURITY_GROUP_IDS:-}" \
+    LAMBDA_VPC_SUBNET_ID_1="${LAMBDA_VPC_SUBNET_ID_1:-}" \
+    LAMBDA_VPC_SUBNET_ID_2="${LAMBDA_VPC_SUBNET_ID_2:-}" \
+    LAMBDA_VPC_SUBNET_ID_3="${LAMBDA_VPC_SUBNET_ID_3:-}" \
+    LAMBDA_VPC_SECURITY_GROUP_ID="${LAMBDA_VPC_SECURITY_GROUP_ID:-}" \
     python3 - "$target" <<'PY'
 import os
 import pathlib
@@ -483,8 +515,10 @@ lines = [
     f"AWS_REGION={shlex.quote(os.environ.get('AWS_REGION', ''))}",
     f"FRONTEND_DOMAIN_NAME={shlex.quote(os.environ.get('FRONTEND_DOMAIN_NAME', ''))}",
     f"RDS_VPC_ID={shlex.quote(os.environ.get('RDS_VPC_ID', ''))}",
-    f"LAMBDA_VPC_SUBNET_IDS={shlex.quote(os.environ.get('LAMBDA_VPC_SUBNET_IDS', ''))}",
-    f"LAMBDA_VPC_SECURITY_GROUP_IDS={shlex.quote(os.environ.get('LAMBDA_VPC_SECURITY_GROUP_IDS', ''))}",
+    f"LAMBDA_VPC_SUBNET_ID_1={shlex.quote(os.environ.get('LAMBDA_VPC_SUBNET_ID_1', ''))}",
+    f"LAMBDA_VPC_SUBNET_ID_2={shlex.quote(os.environ.get('LAMBDA_VPC_SUBNET_ID_2', ''))}",
+    f"LAMBDA_VPC_SUBNET_ID_3={shlex.quote(os.environ.get('LAMBDA_VPC_SUBNET_ID_3', ''))}",
+    f"LAMBDA_VPC_SECURITY_GROUP_ID={shlex.quote(os.environ.get('LAMBDA_VPC_SECURITY_GROUP_ID', ''))}",
     "",
 ]
 text = "\n".join(lines) + "\n"

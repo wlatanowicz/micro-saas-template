@@ -44,10 +44,16 @@ provider:
         - OPTIONS
   environment:
     DATABASE_URL: ${env:DATABASE_URL, ''}
-  # VPC for all Lambdas. Prefer editing lambda-vpc.config.json (see lambda-vpc.config.example.json), or replace
-  # this line with a literal block: vpc: { subnetIds: [...], securityGroupIds: [...] }.
-  # When lambda-vpc.config.json is absent, lambda-vpc.no-vpc.json (false) disables VPC.
-  vpc: ${file(./lambda-vpc.config.json), file(./lambda-vpc.no-vpc.json)}
+  # Lambda VPC (optional): env vars below. Use npm run deploy / npm run print (generates serverless.deploy.yml).
+  # LAMBDA_VPC_START
+  vpc:
+    subnetIds:
+      - ${env:LAMBDA_VPC_SUBNET_ID_1}
+      - ${env:LAMBDA_VPC_SUBNET_ID_2}
+      - ${env:LAMBDA_VPC_SUBNET_ID_3}
+    securityGroupIds:
+      - ${env:LAMBDA_VPC_SECURITY_GROUP_ID}
+  # LAMBDA_VPC_END
 
 functions:
   api:

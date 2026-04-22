@@ -168,10 +168,18 @@ if gh_env:
 
 if not dry and not assume_yes:
     print(f"Will set {nsec} secret(s) and {nvar} variable(s) on {target}.", file=sys.stderr)
+    # stdin is the bash heredoc (python3 - <<'PY'); read the terminal instead.
+    sys.stderr.write("Continue? [y/N] ")
+    sys.stderr.flush()
+    ans = ""
     try:
-        ans = input("Continue? [y/N] ").strip().lower()
-    except EOFError:
-        ans = ""
+        with open("/dev/tty", "r", encoding="utf-8") as tty:
+            ans = tty.readline().strip().lower()
+    except OSError:
+        try:
+            ans = input().strip().lower()
+        except EOFError:
+            ans = ""
     if ans not in ("y", "yes"):
         print("Aborted.", file=sys.stderr)
         sys.exit(1)

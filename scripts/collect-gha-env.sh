@@ -100,7 +100,6 @@ fi
 REGION="${REGION:-eu-central-1}"
 
 : "${RDS_VPC_ID:=}"
-: "${RDS_SECURITY_GROUP_ID:=}"
 : "${LAMBDA_VPC_SUBNET_IDS:=}"
 : "${LAMBDA_VPC_SECURITY_GROUP_IDS:=}"
 
@@ -111,7 +110,8 @@ apply_rds_network_from_instance() {
     --db-instance-identifier "$identifier" --output json 2>/dev/null || echo '{}')"
   RDS_VPC_ID="$(jq -r '(.DBInstances[0] // {}) | (.DBSubnetGroup // {}) | .VpcId // empty' <<< "$json")"
   LAMBDA_VPC_SUBNET_IDS="$(jq -r '(.DBInstances[0] // {}) | (.DBSubnetGroup // {}) | .Subnets // [] | map(.SubnetIdentifier) | join(",")' <<< "$json")"
-  RDS_SECURITY_GROUP_ID="$(jq -r '(.DBInstances[0] // {}) | (.VpcSecurityGroups // []) | map(.VpcSecurityGroupId) | .[0] // empty' <<< "$json")"
+  # Same security group(s) already attached to the RDS instance (comma-separated if several).
+  LAMBDA_VPC_SECURITY_GROUP_IDS="$(jq -r '(.DBInstances[0] // {}) | (.VpcSecurityGroups // []) | map(.VpcSecurityGroupId) | join(",")' <<< "$json")"
 }
 
 build_database_url_from_rds() {
@@ -203,7 +203,7 @@ if ! $SKIP_DB_WIZARD; then
       if [[ -z "$dbpass" ]]; then
         echo "Password empty; keeping or setting DATABASE_URL manually." >&2
         apply_rds_network_from_instance "$RID"
-        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_IDS:-?} rds_sg=${RDS_SECURITY_GROUP_ID:-?}"
+        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_IDS:-?} sg=${LAMBDA_VPC_SECURITY_GROUP_IDS:-?}"
         read -rp "DATABASE_URL [Enter to keep existing]: " NEW_DB_URL
         DATABASE_URL="${NEW_DB_URL:-$DATABASE_URL}"
       else
@@ -211,7 +211,7 @@ if ! $SKIP_DB_WIZARD; then
         DATABASE_URL="$(build_database_url_from_rds "$RID" "$dbname")"
         unset _COLLECT_DB_PASS
         apply_rds_network_from_instance "$RID"
-        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_IDS:-?} rds_sg=${RDS_SECURITY_GROUP_ID:-?}"
+        echo "From RDS ${RID}: VPC=${RDS_VPC_ID:-?} subnets=${LAMBDA_VPC_SUBNET_IDS:-?} sg=${LAMBDA_VPC_SECURITY_GROUP_IDS:-?}"
       fi
     fi
   fi
@@ -219,21 +219,17 @@ fi
 
 echo ""
 echo "=== Lambda VPC (optional; private RDS) ==="
-echo "Recommended: set LAMBDA_VPC_SUBNET_IDS + RDS_VPC_ID + RDS_SECURITY_GROUP_ID (RDS instance SG)."
-echo "  Serverless then creates a Lambda ENI security group and adds inbound :5432 on the RDS SG from it."
-echo "Alternative: set LAMBDA_VPC_SUBNET_IDS + LAMBDA_VPC_SECURITY_GROUP_IDS only (manual SGs; you must allow Lambda→RDS yourself)."
-[[ -n "${RDS_VPC_ID}" ]] && echo "RDS_VPC_ID (from RDS or .env.gha):" && printf '%s\n' "$RDS_VPC_ID"
-[[ -n "${RDS_SECURITY_GROUP_ID}" ]] && echo "RDS_SECURITY_GROUP_ID (from RDS or .env.gha):" && printf '%s\n' "$RDS_SECURITY_GROUP_ID"
+echo "Lambdas use LAMBDA_VPC_SUBNET_IDS + LAMBDA_VPC_SECURITY_GROUP_IDS (same SGs as the RDS instance when filled from RDS)."
+echo "Ensure the RDS security group allows DB traffic from itself (self-referencing rule) if Lambdas share that SG."
+[[ -n "${RDS_VPC_ID}" ]] && echo "RDS_VPC_ID (from RDS or .env.gha; informational):" && printf '%s\n' "$RDS_VPC_ID"
 [[ -n "${LAMBDA_VPC_SUBNET_IDS}" ]] && echo "LAMBDA_VPC_SUBNET_IDS (from RDS or .env.gha):" && printf '%s\n' "$LAMBDA_VPC_SUBNET_IDS"
-[[ -n "${LAMBDA_VPC_SECURITY_GROUP_IDS}" ]] && echo "LAMBDA_VPC_SECURITY_GROUP_IDS (from .env.gha):" && printf '%s\n' "$LAMBDA_VPC_SECURITY_GROUP_IDS"
+[[ -n "${LAMBDA_VPC_SECURITY_GROUP_IDS}" ]] && echo "LAMBDA_VPC_SECURITY_GROUP_IDS (RDS instance SGs or .env.gha):" && printf '%s\n' "$LAMBDA_VPC_SECURITY_GROUP_IDS"
 read -rp "LAMBDA_VPC_SUBNET_IDS [Enter to keep]: " NEW_SUB
 LAMBDA_VPC_SUBNET_IDS="${NEW_SUB:-$LAMBDA_VPC_SUBNET_IDS}"
-read -rp "RDS_SECURITY_GROUP_ID (RDS instance vpc security group; for managed Lambda↔RDS rule) [Enter to keep]: " NEW_RDSG
-RDS_SECURITY_GROUP_ID="${NEW_RDSG:-$RDS_SECURITY_GROUP_ID}"
-read -rp "RDS_VPC_ID (VPC for managed Lambda SG) [Enter to keep]: " NEW_VPC
-RDS_VPC_ID="${NEW_VPC:-$RDS_VPC_ID}"
-read -rp "LAMBDA_VPC_SECURITY_GROUP_IDS (manual mode only; comma-separated) [Enter to keep]: " NEW_SG
+read -rp "LAMBDA_VPC_SECURITY_GROUP_IDS (comma-separated; usually same as RDS) [Enter to keep]: " NEW_SG
 LAMBDA_VPC_SECURITY_GROUP_IDS="${NEW_SG:-$LAMBDA_VPC_SECURITY_GROUP_IDS}"
+read -rp "RDS_VPC_ID (informational) [Enter to keep]: " NEW_VPC
+RDS_VPC_ID="${NEW_VPC:-$RDS_VPC_ID}"
 
 echo ""
 echo "=== ACM certificate (us-east-1, for CloudFront custom domain) ==="
@@ -459,7 +455,6 @@ write_env_file() {
     AWS_REGION="$REGION" \
     FRONTEND_DOMAIN_NAME="${FRONTEND_DOMAIN_NAME:-}" \
     RDS_VPC_ID="${RDS_VPC_ID:-}" \
-    RDS_SECURITY_GROUP_ID="${RDS_SECURITY_GROUP_ID:-}" \
     LAMBDA_VPC_SUBNET_IDS="${LAMBDA_VPC_SUBNET_IDS:-}" \
     LAMBDA_VPC_SECURITY_GROUP_IDS="${LAMBDA_VPC_SECURITY_GROUP_IDS:-}" \
     python3 - "$target" <<'PY'
@@ -488,7 +483,6 @@ lines = [
     f"AWS_REGION={shlex.quote(os.environ.get('AWS_REGION', ''))}",
     f"FRONTEND_DOMAIN_NAME={shlex.quote(os.environ.get('FRONTEND_DOMAIN_NAME', ''))}",
     f"RDS_VPC_ID={shlex.quote(os.environ.get('RDS_VPC_ID', ''))}",
-    f"RDS_SECURITY_GROUP_ID={shlex.quote(os.environ.get('RDS_SECURITY_GROUP_ID', ''))}",
     f"LAMBDA_VPC_SUBNET_IDS={shlex.quote(os.environ.get('LAMBDA_VPC_SUBNET_IDS', ''))}",
     f"LAMBDA_VPC_SECURITY_GROUP_IDS={shlex.quote(os.environ.get('LAMBDA_VPC_SECURITY_GROUP_IDS', ''))}",
     "",

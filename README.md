@@ -20,7 +20,7 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 1. In `backend/serverless.yml`, set `service:` to your stack name prefix (default stack is `{service}-{stage}`).
 2. Optional: set **`FRONTEND_DOMAIN_NAME`** and **`FRONTEND_ACM_CERT_ARN`** (us-east-1) together when deploying. The certificate’s SAN must include that hostname; otherwise CloudFront returns an invalid CNAME error. If you omit either, the stack uses the default **\*.cloudfront.net** URL only.
-3. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database. For **private RDS**, set repository variables **`LAMBDA_VPC_SUBNET_IDS`**, **`RDS_VPC_ID`**, and **`RDS_SECURITY_GROUP_ID`** (the RDS instance’s VPC security group). The Serverless stack then creates a **Lambda ENI security group** and adds **inbound TCP 5432** on that RDS SG from it. **`collect-gha-env.sh`** can fill these from the selected RDS instance. Alternatively set **`LAMBDA_VPC_SECURITY_GROUP_IDS`** only and manage rules yourself (no automatic ingress).
+3. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database. For **private RDS**, set **`LAMBDA_VPC_SUBNET_IDS`** and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** (comma-separated). **`collect-gha-env.sh`** fills both from the selected instance: subnets from the DB subnet group, security groups from **`VpcSecurityGroups`** (the same SGs the database already uses). Lambdas are placed in those SGs; add a **self-referencing inbound rule** on that SG for PostgreSQL (or allow the SG as source) if it does not already allow clients in the same group.
 4. Copy `frontend/.env.example` to `frontend/.env` for local dev and set `VITE_API_BASE_URL` to your API URL (or local server).
 5. Configure GitHub **Actions** secrets and variables (below). Grant the OIDC role **`lambda:InvokeFunction`** on the **`migrate`** function (see [docs/github-actions-aws-oidc.md](docs/github-actions-aws-oidc.md)).
 
@@ -80,12 +80,10 @@ From `backend/` (requires AWS credentials and env vars as in CI):
 npm ci
 uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements-lambda.txt
 export DATABASE_URL='postgresql://...'
-# Optional: private RDS — prefer managed SG + RDS ingress (PostgreSQL 5432):
+# Optional: private RDS — same subnets + SGs as the RDS instance (from collect-gha-env or by hand):
 # export LAMBDA_VPC_SUBNET_IDS='subnet-aaa,subnet-bbb'
-# export RDS_VPC_ID='vpc-...'
-# export RDS_SECURITY_GROUP_ID='sg-rds...'
-# Or manual ENI security groups only (you open RDS to these SGs yourself):
-# export LAMBDA_VPC_SECURITY_GROUP_IDS='sg-lambda-eni'
+# export LAMBDA_VPC_SECURITY_GROUP_IDS='sg-rds...'
+# export RDS_VPC_ID='vpc-...'   # optional; informational in .env.gha
 # Optional custom SPA hostname (set BOTH, cert must cover the hostname in us-east-1):
 # export FRONTEND_ACM_CERT_ARN='arn:aws:acm:us-east-1:...:certificate/...'
 # export FRONTEND_DOMAIN_NAME='app.yourdomain.com'
@@ -120,10 +118,9 @@ Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run mi
 | Secret | `FRONTEND_ACM_CERT_ARN` | Optional; ACM cert ARN (us-east-1). Required with `FRONTEND_DOMAIN_NAME` if you use a custom SPA domain. |
 | Variable | `AWS_REGION` | Optional; default `eu-central-1` |
 | Variable | `FRONTEND_DOMAIN_NAME` | Optional; custom SPA hostname. Use with `FRONTEND_ACM_CERT_ARN`; leave unset for default CloudFront URL only. |
-| Variable | `RDS_VPC_ID` | Optional; VPC id for the stack-managed Lambda ENI security group (same VPC as RDS subnets). Set with **`RDS_SECURITY_GROUP_ID`** and **`LAMBDA_VPC_SUBNET_IDS`** for automatic RDS ingress. |
-| Variable | `RDS_SECURITY_GROUP_ID` | Optional; **RDS instance** `sg-…` that receives **`AuthorizeSecurityGroupIngress`** for **TCP 5432** from the stack-created Lambda security group (PostgreSQL). |
-| Variable | `LAMBDA_VPC_SUBNET_IDS` | Optional; comma-separated subnet ids for **`api`** and **`migrate`** when placed in a VPC. |
-| Variable | `LAMBDA_VPC_SECURITY_GROUP_IDS` | Optional; manual mode only—comma-separated Lambda ENI security groups. Omit when using **`RDS_VPC_ID`** + **`RDS_SECURITY_GROUP_ID`** (managed SG). |
+| Variable | `RDS_VPC_ID` | Optional; informational (VPC of the RDS subnet group). Not read by Serverless. |
+| Variable | `LAMBDA_VPC_SUBNET_IDS` | Optional; comma-separated subnet ids for **`api`** and **`migrate`** in a VPC (same subnets as RDS). |
+| Variable | `LAMBDA_VPC_SECURITY_GROUP_IDS` | Optional; comma-separated security group ids—typically the **same** SGs attached to the RDS instance (`collect-gha-env.sh` fills this from **`VpcSecurityGroups`**). |
 | Secret | `CLOUDFLARE_API_TOKEN` | Optional; DNS:Edit for zone |
 | Secret | `CLOUDFLARE_ZONE_ID` | Optional; or use `CLOUDFLARE_ZONE_NAME` |
 | Secret | `CLOUDFLARE_ZONE_NAME` | Optional; e.g. `example.com` |
@@ -138,7 +135,7 @@ With credentials available (e.g. **`AWS_PROFILE`**), run:
 AWS_PROFILE=your-profile ./scripts/collect-gha-env.sh
 ```
 
-The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1**, and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend domain** / **Cloudflare** values. When you build **`DATABASE_URL`** from an RDS instance, it fills **`RDS_VPC_ID`**, **`LAMBDA_VPC_SUBNET_IDS`**, and **`RDS_SECURITY_GROUP_ID`** (first RDS VPC security group). For deploy, prefer those three so the stack manages Lambda SG + RDS ingress; use **`LAMBDA_VPC_SECURITY_GROUP_IDS`** only if you skip managed RDS networking. It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. If **`.env.gha` already exists**, its values are loaded first and used as defaults (press **Enter** to keep each field, **`k`** to keep **DATABASE_URL** / ACM). Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
+The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1**, and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend domain** / **Cloudflare** values. When you build **`DATABASE_URL`** from an RDS instance, it fills **`RDS_VPC_ID`**, **`LAMBDA_VPC_SUBNET_IDS`**, and **`LAMBDA_VPC_SECURITY_GROUP_IDS`** (all RDS **`VpcSecurityGroups`**). It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. If **`.env.gha` already exists**, its values are loaded first and used as defaults (press **Enter** to keep each field, **`k`** to keep **DATABASE_URL** / ACM). Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
 
 Requires **AWS CLI**, **jq**, and **Python 3**. The generated **`.env.gha`** uses **`# --- Secrets ---`** and **`# --- Variables ---`** section headers; **`push-gha-env.sh`** uploads every non-empty line under each block to GitHub **secrets** or **variables**. Run **`./scripts/push-gha-env.sh`** (needs **`gh`** and **Python 3**; **`gh`** with **repo** scope). Use **`./scripts/push-gha-env.sh -n`** first to preview. The **master password** and **OIDC role ARN** are always prompted (not returned by AWS APIs).
 

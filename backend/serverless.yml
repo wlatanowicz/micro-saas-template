@@ -44,9 +44,8 @@ provider:
         - OPTIONS
   environment:
     DATABASE_URL: ${env:DATABASE_URL, ''}
-  # Lambda VPC: set LAMBDA_VPC_SUBNET_IDS. Prefer RDS_VPC_ID + RDS_SECURITY_GROUP_ID so the stack
-  # creates a Lambda SG and opens the RDS security group on 5432. Or set LAMBDA_VPC_SECURITY_GROUP_IDS
-  # manually (comma-separated). See README.
+  # Lambda VPC: LAMBDA_VPC_SUBNET_IDS + LAMBDA_VPC_SECURITY_GROUP_IDS (comma-separated).
+  # collect-gha-env.sh fills both from the selected RDS instance (RDS subnet group + instance SGs).
   vpc: ${file(./serverless-lambda-vpc.cjs)}
 
 functions:
@@ -97,44 +96,7 @@ resources:
                 - "${self:custom.frontendAcmCertArn}"
                 - ""
 
-    # Managed Lambda ENI security group + RDS ingress (PostgreSQL 5432). Matches serverless-lambda-vpc.cjs.
-    UseLambdaVpcWithRds:
-      Fn::And:
-        - Fn::Not:
-            - Fn::Equals:
-                - "${env:RDS_VPC_ID, ''}"
-                - ""
-        - Fn::Not:
-            - Fn::Equals:
-                - "${env:RDS_SECURITY_GROUP_ID, ''}"
-                - ""
-        - Fn::Not:
-            - Fn::Equals:
-                - "${env:LAMBDA_VPC_SUBNET_IDS, ''}"
-                - ""
-
   Resources:
-    LambdaRdsConnectivitySecurityGroup:
-      Type: AWS::EC2::SecurityGroup
-      Condition: UseLambdaVpcWithRds
-      Properties:
-        GroupDescription: !Sub "${self:service}-${self:provider.stage} Lambda ENIs (api + migrate) → RDS"
-        VpcId: ${env:RDS_VPC_ID, ''}
-        SecurityGroupEgress:
-          - IpProtocol: "-1"
-            CidrIp: 0.0.0.0/0
-
-    RdsIngressFromLambdaSecurityGroup:
-      Type: AWS::EC2::SecurityGroupIngress
-      Condition: UseLambdaVpcWithRds
-      Properties:
-        Description: !Sub "PostgreSQL from ${self:service}-${self:provider.stage} Lambdas"
-        GroupId: ${env:RDS_SECURITY_GROUP_ID, ''}
-        IpProtocol: tcp
-        FromPort: 5432
-        ToPort: 5432
-        SourceSecurityGroupId: !Ref LambdaRdsConnectivitySecurityGroup
-
     FrontendBucket:
       Type: AWS::S3::Bucket
       Properties:

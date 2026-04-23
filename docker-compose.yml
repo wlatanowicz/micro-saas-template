@@ -1,0 +1,57 @@
+# Local development stack: docker compose up --build
+#
+# Optional root .env (gitignored) can override, for example:
+#   POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB — PostgreSQL and DATABASE_URL
+#   JWT_SECRET — must be set for auth when DATABASE_URL is set (see backend/.env.example)
+#   VITE_API_BASE_URL — API URL the browser uses (e.g. http://localhost:8000, not the backend
+#   service name). If unset, defaults to http://localhost:8000
+#
+# Stopping: docker compose down. Add -v to remove the Postgres data volume.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-micro_saas}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-micro_saas}
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  backend_venv:
+  frontend_node_modules:

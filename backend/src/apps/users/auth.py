@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import bcrypt
 import jwt
 from fastapi import HTTPException
-from passlib.context import CryptContext
 
 from src.utils.db import get_database_url
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 JWT_ALGORITHM = "HS256"
 MIN_PASSWORD_LENGTH = 8
@@ -22,12 +21,24 @@ def get_jwt_secret() -> str | None:
     return secret or None
 
 
+def _password_digest(plain: str) -> bytes:
+    """32-byte digest so bcrypt never sees secrets longer than its 72-byte limit."""
+    return hashlib.sha256(plain.encode("utf-8")).digest()
+
+
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return bcrypt.hashpw(_password_digest(plain), bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    h = hashed.encode("ascii")
+    if bcrypt.checkpw(_password_digest(plain), h):
+        return True
+    # Accounts created before pre-hashing: bcrypt(raw utf-8), only valid if <= 72 bytes.
+    legacy = plain.encode("utf-8")
+    if len(legacy) > 72:
+        return False
+    return bcrypt.checkpw(legacy, h)
 
 
 def normalize_email(email: str) -> str:

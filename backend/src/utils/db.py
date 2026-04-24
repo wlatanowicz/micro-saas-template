@@ -5,16 +5,25 @@ For production workloads against RDS, use RDS Proxy and tune pool settings.
 
 from __future__ import annotations
 
+import enum
 import os
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 
-from sqlalchemy import create_engine
+from sqlalchemy import Enum, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session, SQLModel
 
 _engine = None
 _SessionLocal = None
+
+
+def to_sql_enum(enums: type[enum.Enum], **kw: Any) -> Enum:
+    def get_enum_values(enum_class: type[enum.Enum]) -> list[Any]:
+        return [member.value for member in enum_class]
+
+    return Enum(enums, values_callable=get_enum_values, **kw)
 
 
 def get_database_url() -> str | None:

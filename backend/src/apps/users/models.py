@@ -3,8 +3,9 @@ from __future__ import annotations
 import enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Enum as SAEnum
 from sqlmodel import Column, Field, SQLModel
+
+from src.utils.db import to_sql_enum
 
 
 class UserStatus(enum.StrEnum):
@@ -21,14 +22,5 @@ class User(SQLModel, table=True):
     hashed_password: str = Field(max_length=255)
     status: UserStatus = Field(
         default=UserStatus.active,
-        sa_column=Column(
-            SAEnum(
-                UserStatus,
-                name="userstatus",
-                create_constraint=True,
-                native_enum=False,
-                values_callable=lambda x: [e.value for e in x],
-            ),
-            nullable=False,
-        ),
+        sa_column=Column(to_sql_enum(UserStatus, name="userstatus"), nullable=False),
     )

@@ -6,3 +6,6 @@ docker-start:
 
 migrate:
 	docker compose exec backend uv run alembic upgrade head
+
+make-migrations:
+	docker compose exec backend uv run alembic revision --autogenerate

@@ -63,6 +63,7 @@ functions:
       patterns:
         - "!alembic/**"
         - "!alembic.ini"
+        - "!src/**/tests/**"
         - "!src/migrate_handler.py"
     events:
       - httpApi:
@@ -84,6 +85,7 @@ package:
     - "!venv/**"
     - "!.venv/**"
     - "!tests/**"
+    - "!src/**/tests/**"
     - "!**/__pycache__/**"
     - "!*.pyc"
     - "!pyproject.toml"

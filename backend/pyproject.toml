@@ -29,6 +29,10 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+exclude = ["**/tests/**"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["**/tests/**"]
 
 [tool.ruff]
 target-version = "py311"
@@ -39,5 +43,5 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "src/apps/users/tests"]
 pythonpath = ["."]

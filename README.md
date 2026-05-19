@@ -28,12 +28,38 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 Dependencies live in [`backend/pyproject.toml`](backend/pyproject.toml) and [`backend/uv.lock`](backend/uv.lock). Runtime deps include **Alembic** (used by the **`migrate`** Lambda). Test tooling stays in the **dev** dependency group.
 
+**Integration tests** hit **real PostgreSQL** (same engine as production). From the repo root, use ephemeral Docker Postgres + migrations + pytest:
+
+```bash
+make test-be            # Docker postgres:18 on TEST_DB_PORT (default 5433), then pytest
+```
+
+For CI or an already-running Postgres, set `DATABASE_URL` and run migrations before pytest:
+
+```bash
+cd backend
+uv sync --all-groups
+export DATABASE_URL='postgresql://user:pass@host:5432/dbname'
+export JWT_SECRET='your-test-secret-at-least-32-chars-long!'
+uv run alembic upgrade head
+uv run pytest
+# Or from repo root: make test-be-ci
+```
+
+Lint and quick pytest **without Docker** (auth integration tests skip if `DATABASE_URL` is unset):
+
+```bash
+cd backend
+uv run pytest
+uv run ruff check src tests conftest.py
+```
+
+Run the API locally (set `DATABASE_URL` if you need routes that persist data):
+
 ```bash
 cd backend
 uv sync --all-groups
 export DATABASE_URL='postgresql://user:pass@host:5432/dbname'   # optional for /api/items
-uv run pytest
-uv run ruff check src tests
 PYTHONPATH=. uv run uvicorn src.main:app --reload --port 8000
 ```
 

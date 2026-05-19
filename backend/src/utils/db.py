@@ -50,6 +50,24 @@ def init_engine():
     )
 
 
+def reinit_engine() -> None:
+    """Rebuild pool/engine from the current ``DATABASE_URL`` (tests, scripts)."""
+    global _engine, _SessionLocal
+    if _engine is not None:
+        _engine.dispose()
+    _engine = None
+    _SessionLocal = None
+    init_engine()
+
+
+def get_engine():
+    """Return the sync SQLAlchemy engine (requires ``DATABASE_URL``)."""
+    if _engine is None:
+        msg = "DATABASE_URL is not set or engine not initialized"
+        raise RuntimeError(msg)
+    return _engine
+
+
 init_engine()
 
 

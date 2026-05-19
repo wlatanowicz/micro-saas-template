@@ -10,6 +10,24 @@ jobs:
   build-and-verify:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SYNC_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      JWT_SECRET: test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,12 +57,16 @@ jobs:
         run: uv sync --frozen --all-groups
         working-directory: backend
 
-      - name: Backend unit tests
+      - name: Backend migrations (Postgres)
+        run: uv run alembic upgrade head
+        working-directory: backend
+
+      - name: Backend tests (Postgres)
         run: uv run pytest
         working-directory: backend
 
       - name: Ruff
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests conftest.py
         working-directory: backend
 
       - name: Export Lambda requirements

@@ -1,45 +1,40 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+import os
+from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy import text
 
 from src.main import app
-from src.utils.deps import get_db_session
+from src.utils.db import get_engine, reinit_engine
 
 
-@pytest.fixture
-def sqlite_auth_engine(monkeypatch: pytest.MonkeyPatch) -> Engine:
-    monkeypatch.setenv("JWT_SECRET", "test-jwt-secret-key-at-least-thirty-two-chars")
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+@pytest.fixture(scope="session")
+def postgres_integration() -> Iterator[None]:
+    """Real Postgres via ``DATABASE_URL`` (see ``make test-be`` / CI service container)."""
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url:
+        pytest.skip(
+            "DATABASE_URL not set — use `make test-be` (ephemeral Postgres) or export "
+            "DATABASE_URL for integration tests",
+        )
+    os.environ.setdefault(
+        "JWT_SECRET",
+        "test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci",
     )
-    SQLModel.metadata.create_all(engine)
-    return engine
+    reinit_engine()
+    yield
+
+
+def _truncate_app_tables() -> None:
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE users, items RESTART IDENTITY CASCADE"))
 
 
 @pytest.fixture
-def auth_client(sqlite_auth_engine: Engine) -> Generator[TestClient, None, None]:
-    SessionLocal = sessionmaker(bind=sqlite_auth_engine, class_=Session, expire_on_commit=False)
-
-    def override_get_db_session() -> Generator[Session, None, None]:
-        session = SessionLocal()
-        try:
-            yield session
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_db_session] = override_get_db_session
-    yield TestClient(app)
-    app.dependency_overrides.pop(get_db_session, None)
+def auth_client(postgres_integration) -> TestClient:
+    _truncate_app_tables()
+    return TestClient(app)

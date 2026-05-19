@@ -4,11 +4,10 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.engine import Engine
-from sqlmodel import Session
 
 from src.apps.users.auth import create_access_token, hash_password
 from src.apps.users.models import User, UserStatus
+from src.utils.db import session_scope
 
 
 def test_signup_without_database(client: TestClient) -> None:
@@ -107,15 +106,14 @@ def test_signin_invalid_credentials(
     assert r.json()["detail"] == "Invalid email or password"
 
 
-def test_signin_inactive_forbidden(sqlite_auth_engine: Engine, auth_client: TestClient) -> None:
+def test_signin_inactive_forbidden(auth_client: TestClient) -> None:
     user = User(
         email="inactive@example.com",
         hashed_password=hash_password("password12"),
         status=UserStatus.inactive,
     )
-    with Session(sqlite_auth_engine) as session:
+    with session_scope() as session:
         session.add(user)
-        session.commit()
 
     r = auth_client.post(
         "/api/auth/signin",
@@ -155,24 +153,22 @@ def test_me_invalid_token(auth_client: TestClient) -> None:
     assert r.json()["detail"] == "Invalid or expired token"
 
 
-def test_me_unknown_subject_claim(sqlite_auth_engine: Engine, auth_client: TestClient) -> None:
+def test_me_unknown_subject_claim(auth_client: TestClient) -> None:
     token = create_access_token(uuid4())
     r = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 401
     assert r.json()["detail"] == "User not found"
 
 
-def test_me_inactive_forbidden(sqlite_auth_engine: Engine, auth_client: TestClient) -> None:
+def test_me_inactive_forbidden(auth_client: TestClient) -> None:
     user = User(
         email="blocked@example.com",
         hashed_password=hash_password("password12"),
         status=UserStatus.disabled,
     )
-    with Session(sqlite_auth_engine) as session:
+    user_id = user.id
+    with session_scope() as session:
         session.add(user)
-        session.commit()
-        session.refresh(user)
-        user_id = user.id
 
     token = create_access_token(user_id)
     r = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})

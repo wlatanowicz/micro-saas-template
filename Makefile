@@ -20,7 +20,7 @@ migrate: ## Apply Alembic migrations inside running backend container
 make-migrations: ## Autogenerate Alembic revision inside running backend container
 	docker compose exec backend uv run alembic revision --autogenerate
 
-test-be: ## Run backend tests with ephemeral Postgres (Docker + migrations + pytest)
+test-be: ## Run backend tests with ephemeral Postgres (Docker; migrations run inside pytest)
 	set -euo pipefail; \
 	docker rm -f micro-saas-test-db 2>/dev/null || true; \
 	docker run -d --rm --name micro-saas-test-db -p $(TEST_DB_PORT):5432 \
@@ -34,14 +34,14 @@ test-be: ## Run backend tests with ephemeral Postgres (Docker + migrations + pyt
 	export DATABASE_URL=postgresql://postgres:$(TEST_DB_PASSWORD)@127.0.0.1:$(TEST_DB_PORT)/postgres; \
 	export SYNC_TEST_DB_URL="$$DATABASE_URL"; \
 	export JWT_SECRET=test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci; \
-	cd backend && uv run alembic upgrade head && uv run pytest
+	cd backend && uv run pytest
 
-test-be-ci: ## Run backend tests using DATABASE_URL from the environment (CI / existing Postgres)
+test-be-ci: ## Run backend tests using DATABASE_URL from the environment (migrations run inside pytest)
 	set -euo pipefail; \
 	if [ -z "$$DATABASE_URL" ]; then echo "DATABASE_URL is required"; exit 1; fi; \
 	export SYNC_TEST_DB_URL="$$DATABASE_URL"; \
 	export JWT_SECRET=$${JWT_SECRET:-test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci}; \
-	cd backend && uv run alembic upgrade head && uv run pytest
+	cd backend && uv run pytest
 
 lint-be: ## Run Ruff on backend Python tree
 	cd backend && uv run ruff check src tests conftest.py

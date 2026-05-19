@@ -57,11 +57,7 @@ jobs:
         run: uv sync --frozen --all-groups
         working-directory: backend
 
-      - name: Backend migrations (Postgres)
-        run: uv run alembic upgrade head
-        working-directory: backend
-
-      - name: Backend tests (Postgres)
+      - name: Backend tests (Postgres; schema reset + migrations via pytest)
         run: uv run pytest
         working-directory: backend
 

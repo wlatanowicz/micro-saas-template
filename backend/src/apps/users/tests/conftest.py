@@ -6,14 +6,15 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from tests.db_schema import prepare_postgres_for_integration_tests
 
 from src.main import app
-from src.utils.db import get_engine, reinit_engine
+from src.utils.db import get_engine
 
 
 @pytest.fixture(scope="session")
 def postgres_integration() -> Iterator[None]:
-    """Real Postgres via ``DATABASE_URL`` (see ``make test-be`` / CI service container)."""
+    """Real Postgres: clear schema + Alembic migrations, then pool reset (see skill / README)."""
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         pytest.skip(
@@ -24,7 +25,7 @@ def postgres_integration() -> Iterator[None]:
         "JWT_SECRET",
         "test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci",
     )
-    reinit_engine()
+    prepare_postgres_for_integration_tests()
     yield
 
 

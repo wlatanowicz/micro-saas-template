@@ -28,20 +28,19 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 Dependencies live in [`backend/pyproject.toml`](backend/pyproject.toml) and [`backend/uv.lock`](backend/uv.lock). Runtime deps include **Alembic** (used by the **`migrate`** Lambda). Test tooling stays in the **dev** dependency group.
 
-**Integration tests** hit **real PostgreSQL** (same engine as production). From the repo root, use ephemeral Docker Postgres + migrations + pytest:
+**Integration tests** hit **real PostgreSQL** (same engine as production). When any integration test runs, pytest **clears** the `public` schema and applies **`alembic upgrade head`** once per run (disposable DB only). From the repo root:
 
 ```bash
 make test-be            # Docker postgres:18 on TEST_DB_PORT (default 5433), then pytest
 ```
 
-For CI or an already-running Postgres, set `DATABASE_URL` and run migrations before pytest:
+For CI or your own Postgres, point **`DATABASE_URL`** at a **throwaway** database and run pytest (**do not** use a shared dev DB with data you care about):
 
 ```bash
 cd backend
 uv sync --all-groups
 export DATABASE_URL='postgresql://user:pass@host:5432/dbname'
 export JWT_SECRET='your-test-secret-at-least-32-chars-long!'
-uv run alembic upgrade head
 uv run pytest
 # Or from repo root: make test-be-ci
 ```

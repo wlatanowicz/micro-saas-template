@@ -144,3 +144,34 @@ li {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.oauth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.btn-oauth {
+  display: inline-block;
+  max-width: 22rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  text-align: center;
+  text-decoration: none;
+}
+
+.btn-oauth:hover {
+  background: #f8fafc;
+}
+
+.auth-divider {
+  margin: 0.9rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  text-transform: lowercase;
+}

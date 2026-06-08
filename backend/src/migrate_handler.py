@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+
+from src.config import DATABASE_URL
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -20,7 +21,7 @@ def _alembic_ini_path() -> Path:
 
 def handler(event: object, context: object) -> dict[str, object]:
     del event, context
-    if not os.environ.get("DATABASE_URL", "").strip():
+    if not DATABASE_URL:
         msg = "DATABASE_URL is not set"
         logger.error(msg)
         raise RuntimeError(msg)

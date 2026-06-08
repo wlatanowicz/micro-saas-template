@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -9,6 +7,7 @@ from sqlmodel import Session, select
 
 from src.apps.demo.models import Item
 from src.apps.users.routes import router as auth_router
+from src.config import CORS_ALLOW_ORIGINS
 from src.utils.db import get_database_url
 from src.utils.deps import get_db_session
 
@@ -17,7 +16,7 @@ app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("CORS_ALLOW_ORIGINS", "*").split(","),
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

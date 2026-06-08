@@ -17,6 +17,8 @@ dependencies = [
   "pyjwt>=2.8.0",
   "sqlalchemy>=2.0.0,<3",
   "sqlmodel>=0.0.22,<1",
+  "authlib>=1.7.2",
+  "httpx>=0.28.1",
 ]
 
 [dependency-groups]

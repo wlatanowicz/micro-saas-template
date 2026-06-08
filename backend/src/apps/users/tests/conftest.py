@@ -32,7 +32,9 @@ def postgres_integration() -> Iterator[None]:
 def _truncate_app_tables() -> None:
     engine = get_engine()
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE users, items RESTART IDENTITY CASCADE"))
+        conn.execute(
+            text("TRUNCATE TABLE user_identities, users, items RESTART IDENTITY CASCADE"),
+        )
 
 
 @pytest.fixture

@@ -6,7 +6,6 @@ For production workloads against RDS, use RDS Proxy and tune pool settings.
 from __future__ import annotations
 
 import enum
-import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
@@ -14,6 +13,8 @@ from typing import Any
 from sqlalchemy import Enum, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session, SQLModel
+
+from src.config import DATABASE_URL
 
 _engine = None
 _SessionLocal = None
@@ -27,8 +28,7 @@ def to_sql_enum(enums: type[enum.Enum], **kw: Any) -> Enum:
 
 
 def get_database_url() -> str | None:
-    url = os.environ.get("DATABASE_URL", "").strip()
-    return url or None
+    return DATABASE_URL
 
 
 def init_engine():

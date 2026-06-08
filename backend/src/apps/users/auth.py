@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -9,16 +8,11 @@ import bcrypt
 import jwt
 from fastapi import HTTPException
 
-from src.utils.db import get_database_url
+from src.apps.users import config
+from src.config import DATABASE_URL
 
 JWT_ALGORITHM = "HS256"
 MIN_PASSWORD_LENGTH = 8
-DEFAULT_JWT_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
-
-
-def get_jwt_secret() -> str | None:
-    secret = os.environ.get("JWT_SECRET", "").strip()
-    return secret or None
 
 
 def _password_digest(plain: str) -> bytes:
@@ -46,11 +40,11 @@ def normalize_email(email: str) -> str:
 
 
 def create_access_token(user_id: UUID) -> str:
-    secret = get_jwt_secret()
+    secret = config.JWT_SECRET
     if not secret:
         msg = "JWT_SECRET is not configured"
         raise RuntimeError(msg)
-    minutes = int(os.environ.get("JWT_EXPIRE_MINUTES", str(DEFAULT_JWT_EXPIRE_MINUTES)))
+    minutes = config.JWT_EXPIRE_MINUTES
     expire = datetime.now(UTC) + timedelta(minutes=minutes)
     return jwt.encode(
         {"sub": str(user_id), "exp": expire},
@@ -60,7 +54,7 @@ def create_access_token(user_id: UUID) -> str:
 
 
 def decode_token(token: str) -> dict:
-    secret = get_jwt_secret()
+    secret = config.JWT_SECRET
     if not secret:
         msg = "JWT_SECRET is not configured"
         raise RuntimeError(msg)
@@ -69,7 +63,7 @@ def decode_token(token: str) -> dict:
 
 def ensure_auth_configured() -> None:
     """If the API has a database, signing tokens requires JWT_SECRET."""
-    if not get_database_url() or get_jwt_secret():
+    if not DATABASE_URL or config.JWT_SECRET:
         return
     raise HTTPException(
         status_code=503,

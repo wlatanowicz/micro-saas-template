@@ -34,6 +34,47 @@ def test_me_without_database(client: TestClient) -> None:
     assert "database" in r.json()["detail"].lower()
 
 
+def test_auth_config_defaults(auth_client: TestClient) -> None:
+    r = auth_client.get("/api/auth/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["password"] is True
+    assert body["google"] is False
+    assert body["facebook"] is False
+
+
+def test_auth_config_reflects_env(auth_client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr("src.apps.users.config.AUTH_PASSWORD_ENABLED", False)
+    monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_ENABLED", True)
+    monkeypatch.setattr("src.apps.users.config.AUTH_FACEBOOK_ENABLED", True)
+    r = auth_client.get("/api/auth/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["password"] is False
+    assert body["google"] is True
+    assert body["facebook"] is True
+
+
+def test_signup_password_disabled(auth_client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr("src.apps.users.config.AUTH_PASSWORD_ENABLED", False)
+    r = auth_client.post(
+        "/api/auth/signup",
+        json={"email": "a@b.co", "password": "password12"},
+    )
+    assert r.status_code == 403
+    assert "disabled" in r.json()["detail"].lower()
+
+
+def test_signin_password_disabled(auth_client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr("src.apps.users.config.AUTH_PASSWORD_ENABLED", False)
+    r = auth_client.post(
+        "/api/auth/signin",
+        json={"email": "a@b.co", "password": "password12"},
+    )
+    assert r.status_code == 403
+    assert "disabled" in r.json()["detail"].lower()
+
+
 @pytest.mark.parametrize(
     ("payload", "substr"),
     [

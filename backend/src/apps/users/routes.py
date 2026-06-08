@@ -3,11 +3,12 @@ from __future__ import annotations
 from uuid import UUID
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, field_validator
 from sqlmodel import Session, select
 
+from src.apps.users import config
 from src.apps.users.auth import (
     MIN_PASSWORD_LENGTH,
     create_access_token,
@@ -17,7 +18,13 @@ from src.apps.users.auth import (
     normalize_email,
     verify_password,
 )
+from src.apps.users.guards import ensure_provider_configured, require_method_enabled
 from src.apps.users.models import User, UserStatus
+from src.apps.users.oauth import (
+    authorize_redirect,
+    complete_facebook_callback,
+    complete_google_callback,
+)
 from src.utils.deps import get_db_session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -72,6 +79,21 @@ class TokenOut(BaseModel):
     user: UserPublic
 
 
+class AuthConfigOut(BaseModel):
+    password: bool
+    google: bool
+    facebook: bool
+
+
+@router.get("/config", response_model=AuthConfigOut)
+def auth_config() -> AuthConfigOut:
+    return AuthConfigOut(
+        password=config.AUTH_PASSWORD_ENABLED,
+        google=config.AUTH_GOOGLE_ENABLED,
+        facebook=config.AUTH_FACEBOOK_ENABLED,
+    )
+
+
 @router.post("/signup", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
 def signup(
     body: SignUpIn,
@@ -83,6 +105,7 @@ def signup(
             detail="database not configured",
         )
     ensure_auth_configured()
+    require_method_enabled("password")
     existing = session.exec(select(User).where(User.email == body.email)).first()
     if existing is not None:
         raise HTTPException(
@@ -120,8 +143,13 @@ def signin(
             detail="database not configured",
         )
     ensure_auth_configured()
+    require_method_enabled("password")
     user = session.exec(select(User).where(User.email == body.email)).first()
-    if user is None or not verify_password(body.password, user.hashed_password):
+    if (
+        user is None
+        or user.hashed_password is None
+        or not verify_password(body.password, user.hashed_password)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -189,3 +217,51 @@ def me(
         email=user.email,
         status=user.status.value,
     )
+
+
+@router.get("/google")
+async def google_start(request: Request) -> object:
+    require_method_enabled("google")
+    ensure_auth_configured()
+    ensure_provider_configured("google")
+    return await authorize_redirect(request, "google", "google_callback")
+
+
+@router.get("/google/callback", name="google_callback")
+async def google_callback(
+    request: Request,
+    session: Session | None = Depends(get_db_session),
+) -> object:
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database not configured",
+        )
+    ensure_auth_configured()
+    require_method_enabled("google")
+    ensure_provider_configured("google")
+    return await complete_google_callback(request, session)
+
+
+@router.get("/facebook")
+async def facebook_start(request: Request) -> object:
+    require_method_enabled("facebook")
+    ensure_auth_configured()
+    ensure_provider_configured("facebook")
+    return await authorize_redirect(request, "facebook", "facebook_callback")
+
+
+@router.get("/facebook/callback", name="facebook_callback")
+async def facebook_callback(
+    request: Request,
+    session: Session | None = Depends(get_db_session),
+) -> object:
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database not configured",
+        )
+    ensure_auth_configured()
+    require_method_enabled("facebook")
+    ensure_provider_configured("facebook")
+    return await complete_facebook_callback(request, session)

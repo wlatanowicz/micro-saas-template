@@ -17,6 +17,27 @@ type TokenResponse = {
   user: MeUser;
 };
 
+type AuthConfig = {
+  password: boolean;
+  google: boolean;
+  facebook: boolean;
+};
+
+function parseOAuthHash(): { accessToken?: string; authError?: string } {
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash) {
+    return {};
+  }
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get("access_token") ?? undefined;
+  const authError = params.get("auth_error") ?? undefined;
+  if (accessToken || authError) {
+    const path = window.location.pathname + window.location.search;
+    window.history.replaceState(null, "", path);
+  }
+  return { accessToken, authError };
+}
+
 function apiBase() {
   return (apiBaseUrl || "").replace(/\/$/, "");
 }
@@ -48,6 +69,7 @@ export function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
 
   const getStoredToken = useCallback((): string | null => {
     return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -88,11 +110,21 @@ export function App() {
 
     void (async () => {
       try {
+        const oauthResult = parseOAuthHash();
+        if (oauthResult.authError) {
+          setAuthError(decodeURIComponent(oauthResult.authError));
+        }
+
         const h = await fetch(`${base}/health`);
         if (!h.ok) {
           throw new Error(`Health check failed: ${h.status}`);
         }
         setHealth((await h.json()) as Health);
+
+        const configRes = await fetch(`${base}/api/auth/config`);
+        if (configRes.ok) {
+          setAuthConfig((await configRes.json()) as AuthConfig);
+        }
 
         const i = await fetch(`${base}/api/items`);
         if (!i.ok) {
@@ -100,8 +132,11 @@ export function App() {
         }
         setItems((await i.json()) as ItemsResponse);
 
-        const t = getStoredToken();
+        const t = oauthResult.accessToken ?? getStoredToken();
         if (t) {
+          if (oauthResult.accessToken) {
+            localStorage.setItem(ACCESS_TOKEN_KEY, t);
+          }
           await loadMe(t);
         }
       } catch (e) {
@@ -166,6 +201,12 @@ export function App() {
     }
   };
 
+  const methods: AuthConfig = authConfig ?? {
+    password: true,
+    google: false,
+    facebook: false,
+  };
+
   return (
     <>
       <header className="app-header">
@@ -205,58 +246,71 @@ export function App() {
               {authError}
             </p>
           ) : null}
-          <form
-            className="auth-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-            }}
-          >
-            <label>
-              Email
-              <input
-                type="email"
-                name="email"
-                autoComplete="email"
-                value={authEmail}
-                onChange={(e) => {
-                  setAuthEmail(e.target.value);
-                }}
-                required
-                disabled={authBusy}
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                value={authPassword}
-                onChange={(e) => {
-                  setAuthPassword(e.target.value);
-                }}
-                required
-                minLength={1}
-                disabled={authBusy}
-              />
-            </label>
-            <div className="form-actions">
-              <button
-                type="button"
-                onClick={signIn}
-                disabled={authBusy}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                onClick={signUp}
-                disabled={authBusy}
-              >
-                Sign up
-              </button>
+          {methods.google || methods.facebook ? (
+            <div className="oauth-actions">
+              {methods.google ? (
+                <a className="btn-oauth" href={`${apiBase()}/api/auth/google`}>
+                  Continue with Google
+                </a>
+              ) : null}
+              {methods.facebook ? (
+                <a className="btn-oauth" href={`${apiBase()}/api/auth/facebook`}>
+                  Continue with Facebook
+                </a>
+              ) : null}
             </div>
-          </form>
+          ) : null}
+          {methods.password && (methods.google || methods.facebook) ? (
+            <p className="auth-divider" aria-hidden="true">
+              or
+            </p>
+          ) : null}
+          {methods.password ? (
+            <form
+              className="auth-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+              }}
+            >
+              <label>
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="email"
+                  value={authEmail}
+                  onChange={(e) => {
+                    setAuthEmail(e.target.value);
+                  }}
+                  required
+                  disabled={authBusy}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  value={authPassword}
+                  onChange={(e) => {
+                    setAuthPassword(e.target.value);
+                  }}
+                  required
+                  minLength={1}
+                  disabled={authBusy}
+                />
+              </label>
+              <div className="form-actions">
+                <button type="button" onClick={signIn} disabled={authBusy}>
+                  Sign in
+                </button>
+                <button type="button" onClick={signUp} disabled={authBusy}>
+                  Sign up
+                </button>
+              </div>
+            </form>
+          ) : null}
         </div>
       ) : null}
 

@@ -1,4 +1,3 @@
-import os
 from logging.config import fileConfig
 
 import alembic_postgresql_enum  # noqa: F401 — register enum autogenerate/compare
@@ -6,7 +5,8 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 from src.apps.demo.models import Item  # noqa: F401 — register metadata
-from src.apps.users.models import User  # noqa: F401 — register metadata
+from src.config import DATABASE_URL
+from src.apps.users.models import User, UserIdentity  # noqa: F401 — register metadata
 
 config = context.config
 if config.config_file_name is not None:
@@ -16,11 +16,10 @@ target_metadata = SQLModel.metadata
 
 
 def get_url() -> str:
-    url = os.environ.get("DATABASE_URL", "").strip()
-    if not url:
+    if not DATABASE_URL:
         msg = "DATABASE_URL is not set"
         raise RuntimeError(msg)
-    return url
+    return DATABASE_URL
 
 
 def run_migrations_offline() -> None:

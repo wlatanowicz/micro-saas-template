@@ -8,7 +8,11 @@ plugins:
 custom:
   pythonRequirements:
     fileName: requirements-lambda.txt
-    dockerizePip: non-linux
+    # Always build in the Lambda Python 3.11 image so native wheels (e.g. cryptography
+    # from authlib) target Amazon Linux 2 / glibc 2.26. non-linux skips Docker on CI
+    # Linux runners and can bundle manylinux_2_28 wheels that fail at import time.
+    dockerizePip: true
+    dockerImage: public.ecr.aws/sam/build-python3.11
     slim: true
     strip: false
     noDeploy:

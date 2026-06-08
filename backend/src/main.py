@@ -4,8 +4,10 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
+from starlette.middleware.sessions import SessionMiddleware
 
 from src.apps.demo.models import Item
+from src.apps.users import config as users_config
 from src.apps.users.routes import router as auth_router
 from src.config import CORS_ALLOW_ORIGINS
 from src.utils.db import get_database_url
@@ -20,6 +22,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+# authlib Starlette OAuth stores state in request.session during redirect/callback.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=users_config.JWT_SECRET or "dev-insecure-session-secret",
 )
 
 

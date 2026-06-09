@@ -12,7 +12,7 @@ def _no_database_url() -> str | None:
 def _patch_no_database(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.utils.db.get_database_url", _no_database_url)
     monkeypatch.setattr("src.utils.deps.get_database_url", _no_database_url)
-    monkeypatch.setattr("src.main.get_database_url", _no_database_url)
+    monkeypatch.setattr("src.apps.health.routes.get_database_url", _no_database_url)
 
 
 @pytest.fixture

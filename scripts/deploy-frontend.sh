@@ -20,11 +20,21 @@ else
 fi
 
 echo "Reading CloudFormation outputs from ${STACK_NAME} in ${REGION}..."
+API_CUSTOM_URL="$(aws cloudformation describe-stacks \
+  --stack-name "${STACK_NAME}" \
+  --region "${REGION}" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiCustomDomainUrl'].OutputValue" \
+  --output text)"
+
 API_URL="$(aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
   --output text)"
+
+if [[ -n "${API_CUSTOM_URL}" && "${API_CUSTOM_URL}" != "None" ]]; then
+  API_URL="${API_CUSTOM_URL}"
+fi
 
 BUCKET_NAME="$(aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \

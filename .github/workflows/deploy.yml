@@ -27,6 +27,8 @@ jobs:
       AUTH_FRONTEND_URL: ${{ vars.AUTH_FRONTEND_URL != '' && vars.AUTH_FRONTEND_URL || (vars.FRONTEND_DOMAIN_NAME != '' && format('https://{0}', vars.FRONTEND_DOMAIN_NAME) || '') }}
       FRONTEND_ACM_CERT_ARN: ${{ secrets.FRONTEND_ACM_CERT_ARN }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
+      API_ACM_CERT_ARN: ${{ secrets.API_ACM_CERT_ARN }}
+      API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME != '' && vars.API_DOMAIN_NAME || (vars.FRONTEND_DOMAIN_NAME != '' && format('api.{0}', vars.FRONTEND_DOMAIN_NAME) || '') }}
 
     steps:
       - name: Checkout
@@ -67,6 +69,13 @@ jobs:
 
       - name: Run database migrations (Lambda)
         run: bash scripts/invoke-migrate-lambda.sh "${STAGE}" "${REGION}"
+
+      - name: Update Cloudflare CNAME to API Gateway
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_ZONE_NAME: ${{ secrets.CLOUDFLARE_ZONE_NAME }}
+        run: bash scripts/update-cloudflare-api-cname.sh "${STAGE}" "${REGION}"
 
       - name: Install frontend dependencies
         run: npm ci

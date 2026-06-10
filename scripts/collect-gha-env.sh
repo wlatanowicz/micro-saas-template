@@ -261,6 +261,48 @@ else
 fi
 
 echo ""
+echo "=== ACM certificate (${REGION}, for API Gateway custom domain) ==="
+: "${API_ACM_CERT_ARN:=}"
+[[ -n "${API_ACM_CERT_ARN}" ]] && echo "Current API_ACM_CERT_ARN from .env.gha:" && printf '%s\n' "$API_ACM_CERT_ARN"
+API_CERT_JSON="$(aws acm list-certificates "${PROFILE_ARGS[@]}" --region "${REGION}" \
+  --certificate-statuses ISSUED \
+  --query 'CertificateSummaryList' --output json 2>/dev/null || echo '[]')"
+API_CERT_COUNT="$(jq 'length' <<< "$API_CERT_JSON")"
+
+if [[ "$API_CERT_COUNT" -eq 0 ]]; then
+  echo "No ISSUED certificates in ${REGION}."
+  read -rp "API_ACM_CERT_ARN [Enter to keep existing / blank]: " NEW_API_CERT
+  API_ACM_CERT_ARN="${NEW_API_CERT:-$API_ACM_CERT_ARN}"
+else
+  echo "ISSUED certificates in ${REGION}:"
+  API_CERT_ARNS=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && API_CERT_ARNS+=("$line")
+  done < <(jq -r '.[].CertificateArn' <<< "$API_CERT_JSON")
+  for ((idx = 0; idx < ${#API_CERT_ARNS[@]}; idx++)); do
+    dn="$(jq -r --arg arn "${API_CERT_ARNS[$idx]}" '.[] | select(.CertificateArn==$arn) | .DomainName' <<< "$API_CERT_JSON")"
+    echo "  [$idx] ${dn}  ${API_CERT_ARNS[$idx]}"
+  done
+  read -rp "Select index, 'k' keep existing, 's' clear, 'p' paste ARN [k]: " apick
+  apick="${apick:-k}"
+  case "$apick" in
+    k | K) ;;
+    s | S) API_ACM_CERT_ARN="" ;;
+    p | P)
+      read -rp "API_ACM_CERT_ARN: " NEW_API_CERT
+      API_ACM_CERT_ARN="${NEW_API_CERT:-$API_ACM_CERT_ARN}"
+      ;;
+    *)
+      if ! [[ "$apick" =~ ^[0-9]+$ ]] || [[ "$apick" -lt 0 ]] || [[ "$apick" -ge ${#API_CERT_ARNS[@]} ]]; then
+        echo "Invalid selection." >&2
+        exit 1
+      fi
+      API_ACM_CERT_ARN="${API_CERT_ARNS[$apick]}"
+      ;;
+  esac
+fi
+
+echo ""
 echo "=== GitHub OIDC deploy role ==="
 echo "Create the role per docs/github-actions-aws-oidc.md if needed."
 : "${AWS_ROLE_TO_ASSUME:=}"
@@ -417,6 +459,16 @@ read -rp "FRONTEND_DOMAIN_NAME [Enter to keep]: " NEW_DOM
 FRONTEND_DOMAIN_NAME="${NEW_DOM:-$FRONTEND_DOMAIN_NAME}"
 
 echo ""
+echo "=== Optional: custom API hostname (api. prefix; must match API ACM cert SAN) ==="
+: "${API_DOMAIN_NAME:=}"
+if [[ -z "${API_DOMAIN_NAME}" && -n "${FRONTEND_DOMAIN_NAME}" ]]; then
+  API_DOMAIN_NAME="api.${FRONTEND_DOMAIN_NAME}"
+fi
+[[ -n "${API_DOMAIN_NAME}" ]] && echo "Current API_DOMAIN_NAME from .env.gha:" && printf '%s\n' "$API_DOMAIN_NAME"
+read -rp "API_DOMAIN_NAME [Enter to keep]: " NEW_API_DOM
+API_DOMAIN_NAME="${NEW_API_DOM:-$API_DOMAIN_NAME}"
+
+echo ""
 echo "=== Optional: Cloudflare DNS automation ==="
 : "${CLOUDFLARE_API_TOKEN:=}"
 : "${CLOUDFLARE_ZONE_ID:=}"
@@ -436,12 +488,14 @@ write_env_file() {
   DATABASE_URL="$DATABASE_URL" \
     JWT_SECRET="$JWT_SECRET" \
     FRONTEND_ACM_CERT_ARN="$FRONTEND_ACM_CERT_ARN" \
+    API_ACM_CERT_ARN="$API_ACM_CERT_ARN" \
     AWS_ROLE_TO_ASSUME="$AWS_ROLE_TO_ASSUME" \
     CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
     CLOUDFLARE_ZONE_ID="$CLOUDFLARE_ZONE_ID" \
     CLOUDFLARE_ZONE_NAME="$CLOUDFLARE_ZONE_NAME" \
     AWS_REGION="$REGION" \
     FRONTEND_DOMAIN_NAME="${FRONTEND_DOMAIN_NAME:-}" \
+    API_DOMAIN_NAME="${API_DOMAIN_NAME:-}" \
     python3 - "$target" <<'PY'
 import os
 import pathlib
@@ -460,6 +514,7 @@ lines = [
     f"DATABASE_URL={shlex.quote(os.environ.get('DATABASE_URL', ''))}",
     f"JWT_SECRET={shlex.quote(os.environ.get('JWT_SECRET', ''))}",
     f"FRONTEND_ACM_CERT_ARN={shlex.quote(os.environ.get('FRONTEND_ACM_CERT_ARN', ''))}",
+    f"API_ACM_CERT_ARN={shlex.quote(os.environ.get('API_ACM_CERT_ARN', ''))}",
     f"AWS_ROLE_TO_ASSUME={shlex.quote(os.environ.get('AWS_ROLE_TO_ASSUME', ''))}",
     f"CLOUDFLARE_API_TOKEN={shlex.quote(os.environ.get('CLOUDFLARE_API_TOKEN', ''))}",
     f"CLOUDFLARE_ZONE_ID={shlex.quote(os.environ.get('CLOUDFLARE_ZONE_ID', ''))}",
@@ -468,6 +523,7 @@ lines = [
     "# --- Variables ---",
     f"AWS_REGION={shlex.quote(os.environ.get('AWS_REGION', ''))}",
     f"FRONTEND_DOMAIN_NAME={shlex.quote(os.environ.get('FRONTEND_DOMAIN_NAME', ''))}",
+    f"API_DOMAIN_NAME={shlex.quote(os.environ.get('API_DOMAIN_NAME', ''))}",
     "",
 ]
 text = "\n".join(lines) + "\n"

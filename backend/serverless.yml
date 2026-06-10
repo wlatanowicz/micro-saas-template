@@ -25,6 +25,11 @@ custom:
   frontendDomainName: ${env:FRONTEND_DOMAIN_NAME, ''}
   frontendAcmCertArn: ${env:FRONTEND_ACM_CERT_ARN, ''}
 
+  # API custom domain (e.g. api.example.com). Set BOTH env vars; otherwise the default execute-api
+  # URL is used. The ACM cert must be in the same region as the API (provider.region), not us-east-1.
+  apiDomainName: ${env:API_DOMAIN_NAME, ''}
+  apiAcmCertArn: ${env:API_ACM_CERT_ARN, ''}
+
 provider:
   name: aws
   runtime: python3.11
@@ -107,6 +112,16 @@ resources:
             - Fn::Equals:
                 - "${self:custom.frontendAcmCertArn}"
                 - ""
+    HasApiCustomDomain:
+      Fn::And:
+        - Fn::Not:
+            - Fn::Equals:
+                - "${self:custom.apiDomainName}"
+                - ""
+        - Fn::Not:
+            - Fn::Equals:
+                - "${self:custom.apiAcmCertArn}"
+                - ""
 
   Resources:
     FrontendBucket:
@@ -184,6 +199,23 @@ resources:
                 MinimumProtocolVersion: TLSv1.2_2021
               - CloudFrontDefaultCertificate: true
 
+    ApiCustomDomain:
+      Type: AWS::ApiGatewayV2::DomainName
+      Condition: HasApiCustomDomain
+      Properties:
+        DomainName: "${self:custom.apiDomainName}"
+        DomainNameConfigurations:
+          - CertificateArn: "${self:custom.apiAcmCertArn}"
+            EndpointType: REGIONAL
+
+    ApiCustomDomainMapping:
+      Type: AWS::ApiGatewayV2::ApiMapping
+      Condition: HasApiCustomDomain
+      Properties:
+        DomainName: !Ref ApiCustomDomain
+        ApiId: !Ref HttpApi
+        Stage: $default
+
   Outputs:
     FrontendBucketName:
       Value: !Ref FrontendBucket
@@ -198,6 +230,26 @@ resources:
         Fn::If:
           - HasFrontendCustomDomain
           - "${self:custom.frontendDomainName}"
+          - ""
+    ApiCustomDomainName:
+      Value:
+        Fn::If:
+          - HasApiCustomDomain
+          - "${self:custom.apiDomainName}"
+          - ""
+    ApiCustomDomainTarget:
+      Description: CNAME target for the API custom domain (regional API Gateway hostname)
+      Value:
+        Fn::If:
+          - HasApiCustomDomain
+          - !GetAtt ApiCustomDomain.RegionalDomainName
+          - ""
+    ApiCustomDomainUrl:
+      Description: Public HTTPS URL for the API when a custom domain is configured
+      Value:
+        Fn::If:
+          - HasApiCustomDomain
+          - !Sub "https://${self:custom.apiDomainName}"
           - ""
 
     MigrateLambdaName:

@@ -6,23 +6,24 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 
 - `backend/` — Serverless stack, FastAPI app, Alembic migrations
 - `frontend/` — React SPA (`VITE_API_BASE_URL` injected at build time)
-- `scripts/` — Deploy frontend to S3 + invalidate CloudFront; invoke migration Lambda; optional Cloudflare CNAME update; **`collect-gha-env.sh`** builds **`.env.gha`** for GitHub Actions from AWS + prompts; **`push-gha-env.sh`** uploads **`.env.gha`** to repo Actions secrets/variables via **`gh`**
+- `scripts/` — Deploy frontend to S3 + invalidate CloudFront; invoke migration Lambda; optional Cloudflare CNAME updates (frontend + API); **`collect-gha-env.sh`** builds **`.env.gha`** for GitHub Actions from AWS + prompts; **`push-gha-env.sh`** uploads **`.env.gha`** to repo Actions secrets/variables via **`gh`**
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/) (Python toolchain and lockfile-driven installs)
 - Node.js 22+ and npm (Serverless CLI + frontend build)
 - Python 3.11 (matches `serverless.yml` runtime; uv will install/use it via `setup-uv` in CI)
-- AWS account; optional **ACM certificate in us-east-1** only if you use a **custom frontend hostname** on CloudFront
+- AWS account; optional **ACM certificate in us-east-1** only if you use a **custom frontend hostname** on CloudFront; optional **ACM certificate in the deploy region** (e.g. eu-central-1) for a **custom API hostname** on API Gateway
 - PostgreSQL (or compatible) URL for `DATABASE_URL` if you use the API routes that touch the DB
 
 ## First-time checklist (new product from this template)
 
 1. In `backend/serverless.yml`, set `service:` to your stack name prefix (default stack is `{service}-{stage}`).
 2. Optional: set **`FRONTEND_DOMAIN_NAME`** and **`FRONTEND_ACM_CERT_ARN`** (us-east-1) together when deploying. The certificate’s SAN must include that hostname; otherwise CloudFront returns an invalid CNAME error. If you omit either, the stack uses the default **\*.cloudfront.net** URL only.
-3. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database. Lambdas run **outside a VPC** and connect over the network URL in **`DATABASE_URL`** (ensure RDS or your Postgres host allows inbound connections from the internet or your Lambda egress IPs, as appropriate).
-4. Copy `frontend/.env.example` to `frontend/.env` for local dev and set `VITE_API_BASE_URL` to your API URL (or local server).
-5. Configure GitHub **Actions** secrets and variables (below). Grant the OIDC role **`lambda:InvokeFunction`** on the **`migrate`** function (see [docs/github-actions-aws-oidc.md](docs/github-actions-aws-oidc.md)).
+3. Optional: set **`API_DOMAIN_NAME`** and **`API_ACM_CERT_ARN`** (same region as **`AWS_REGION`**, e.g. eu-central-1) together for a custom API hostname (e.g. `api.example.com`). If **`API_DOMAIN_NAME`** is unset in GitHub Actions but **`FRONTEND_DOMAIN_NAME`** is set, deploy derives **`api.<frontend-host>`**. Omit both API vars to keep the default **execute-api** URL.
+4. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database. Lambdas run **outside a VPC** and connect over the network URL in **`DATABASE_URL`** (ensure RDS or your Postgres host allows inbound connections from the internet or your Lambda egress IPs, as appropriate).
+5. Copy `frontend/.env.example` to `frontend/.env` for local dev and set `VITE_API_BASE_URL` to your API URL (or local server).
+6. Configure GitHub **Actions** secrets and variables (below). Grant the OIDC role **`lambda:InvokeFunction`** on the **`migrate`** function (see [docs/github-actions-aws-oidc.md](docs/github-actions-aws-oidc.md)).
 
 ## Local backend
 
@@ -107,6 +108,9 @@ export DATABASE_URL='postgresql://...'
 # Optional custom SPA hostname (set BOTH, cert must cover the hostname in us-east-1):
 # export FRONTEND_ACM_CERT_ARN='arn:aws:acm:us-east-1:...:certificate/...'
 # export FRONTEND_DOMAIN_NAME='app.yourdomain.com'
+# Optional custom API hostname (set BOTH, cert must cover the hostname in the deploy region):
+# export API_ACM_CERT_ARN='arn:aws:acm:eu-central-1:...:certificate/...'
+# export API_DOMAIN_NAME='api.yourdomain.com'
 npm run deploy -- --stage prod --region eu-central-1
 ```
 
@@ -116,6 +120,7 @@ Then from repo root:
 
 ```bash
 bash scripts/deploy-frontend.sh prod eu-central-1
+bash scripts/update-cloudflare-api-cname.sh prod eu-central-1      # if Cloudflare token + zone are set
 bash scripts/update-cloudflare-frontend-cname.sh prod eu-central-1   # if Cloudflare token + zone are set
 ```
 
@@ -129,15 +134,17 @@ Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `r
 
 ### `Deploy` (`.github/workflows/deploy.yml`)
 
-Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run migrations Lambda** → deploy frontend → optional Cloudflare DNS.
+Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run migrations Lambda** → optional Cloudflare API DNS → deploy frontend → optional Cloudflare frontend DNS.
 
 | Type | Name | Purpose |
 |------|------|---------|
 | Secret | `AWS_ROLE_TO_ASSUME` | IAM role ARN for OIDC (`sts:AssumeRoleWithWebIdentity` from GitHub) |
 | Secret | `DATABASE_URL` | Passed to Lambdas (`api`, **`migrate`**). Required for migration step if the database should be updated on deploy. |
 | Secret | `FRONTEND_ACM_CERT_ARN` | Optional; ACM cert ARN (us-east-1). Required with `FRONTEND_DOMAIN_NAME` if you use a custom SPA domain. |
+| Secret | `API_ACM_CERT_ARN` | Optional; ACM cert ARN (deploy region, e.g. eu-central-1). Required with `API_DOMAIN_NAME` (or derived `api.<frontend-host>`) for a custom API domain. |
 | Variable | `AWS_REGION` | Optional; default `eu-central-1` |
 | Variable | `FRONTEND_DOMAIN_NAME` | Optional; custom SPA hostname. Use with `FRONTEND_ACM_CERT_ARN`; leave unset for default CloudFront URL only. |
+| Variable | `API_DOMAIN_NAME` | Optional; custom API hostname (e.g. `api.example.com`). When unset but `FRONTEND_DOMAIN_NAME` is set, deploy uses `api.<frontend-host>`. |
 | Secret | `CLOUDFLARE_API_TOKEN` | Optional; DNS:Edit for zone |
 | Secret | `CLOUDFLARE_ZONE_ID` | Optional; or use `CLOUDFLARE_ZONE_NAME` |
 | Secret | `CLOUDFLARE_ZONE_NAME` | Optional; e.g. `example.com` |
@@ -152,11 +159,11 @@ With credentials available (e.g. **`AWS_PROFILE`**), run:
 AWS_PROFILE=your-profile ./scripts/collect-gha-env.sh
 ```
 
-The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1**, and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend domain** / **Cloudflare** values. When you build **`DATABASE_URL`** from an RDS instance, it uses the instance endpoint and your password. It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. If **`.env.gha` already exists**, its values are loaded first and used as defaults (press **Enter** to keep each field, **`k`** to keep **DATABASE_URL** / ACM). Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
+The script prints **`sts get-caller-identity`**, lists **RDS** instances in the configured region (endpoint, identifier) and **ISSUED ACM** certs in **us-east-1** (CloudFront) and the **deploy region** (API Gateway), and prompts for **database name**, **password**, **OIDC role ARN**, optional **frontend** / **API** domains / **Cloudflare** values. When you build **`DATABASE_URL`** from an RDS instance, it uses the instance endpoint and your password. It writes **`.env.gha`** at the repo root (gitignored) with **`shlex`-safe** quoting. If **`.env.gha` already exists**, its values are loaded first and used as defaults (press **Enter** to keep each field, **`k`** to keep **DATABASE_URL** / ACM). Use **`./scripts/collect-gha-env.sh -n`** to print the file to stdout only.
 
 Requires **AWS CLI**, **jq**, and **Python 3**. The generated **`.env.gha`** uses **`# --- Secrets ---`** and **`# --- Variables ---`** section headers; **`push-gha-env.sh`** uploads every non-empty line under each block to GitHub **secrets** or **variables**. Run **`./scripts/push-gha-env.sh`** (needs **`gh`** and **Python 3**; **`gh`** with **repo** scope). Use **`./scripts/push-gha-env.sh -n`** first to preview. The **master password** and **OIDC role ARN** are always prompted (not returned by AWS APIs).
 
-Optional custom CloudFront hostname is controlled only by environment variables **`FRONTEND_DOMAIN_NAME`** and **`FRONTEND_ACM_CERT_ARN`** (both required together). The deploy workflow passes the repository variable `FRONTEND_DOMAIN_NAME` when set.
+Optional custom CloudFront hostname is controlled by **`FRONTEND_DOMAIN_NAME`** and **`FRONTEND_ACM_CERT_ARN`** (both required together). Optional custom API Gateway hostname uses **`API_DOMAIN_NAME`** and **`API_ACM_CERT_ARN`** in the deploy region; GitHub Actions derives **`api.<frontend-host>`** when only the frontend hostname is set.
 
 ## Lambda packaging notes
 

@@ -1,3 +1,18 @@
+import {
+  Alert,
+  Badge,
+  Button,
+  Container,
+  Divider,
+  Group,
+  List,
+  Paper,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { useCallback, useEffect, useState } from "react";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -208,140 +223,161 @@ export function App() {
   };
 
   return (
-    <>
-      <header className="app-header">
-        <h1>Micro-SaaS template</h1>
-        <div className="app-header__user" aria-live="polite">
+    <Container size="sm" py="xl">
+      <Group justify="space-between" align="flex-start" mb="md" wrap="wrap">
+        <Title order={1}>Micro-SaaS template</Title>
+        <Group gap="xs" aria-live="polite">
           {currentUser ? (
             <>
-              <strong>{currentUser.email}</strong>
-              <span className="user-meta"> {currentUser.status}</span>
-              <button
-                type="button"
-                className="btn-text"
+              <Text fw={600}>{currentUser.email}</Text>
+              <Badge variant="light">{currentUser.status}</Badge>
+              <Button
+                variant="subtle"
+                size="compact-sm"
                 onClick={clearSession}
                 disabled={authBusy}
               >
                 Sign out
-              </button>
+              </Button>
             </>
           ) : (
-            <span className="muted">Not signed in</span>
+            <Text c="dimmed" size="sm">
+              Not signed in
+            </Text>
           )}
-        </div>
-      </header>
-      <p>React frontend talking to the FastAPI Lambda API.</p>
+        </Group>
+      </Group>
+
+      <Text c="dimmed" mb="lg">
+        React frontend talking to the FastAPI Lambda API.
+      </Text>
 
       {configError ? (
-        <div className="card error" role="alert">
+        <Alert color="red" title="Configuration error" mb="md">
           {configError}
-        </div>
+        </Alert>
       ) : null}
 
       {!configError && !currentUser && health ? (
-        <div className="card">
-          <strong>Account</strong>
-          {authError ? (
-            <p className="error" role="alert">
-              {authError}
-            </p>
-          ) : null}
-          {methods.google || methods.facebook ? (
-            <div className="oauth-actions">
-              {methods.google ? (
-                <a className="btn-oauth" href={`${apiBase()}/api/auth/google`}>
-                  Continue with Google
-                </a>
-              ) : null}
-              {methods.facebook ? (
-                <a className="btn-oauth" href={`${apiBase()}/api/auth/facebook`}>
-                  Continue with Facebook
-                </a>
-              ) : null}
-            </div>
-          ) : null}
-          {methods.password && (methods.google || methods.facebook) ? (
-            <p className="auth-divider" aria-hidden="true">
-              or
-            </p>
-          ) : null}
-          {methods.password ? (
-            <form
-              className="auth-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-              }}
-            >
-              <label>
-                Email
-                <input
-                  type="email"
-                  name="email"
-                  autoComplete="email"
-                  value={authEmail}
-                  onChange={(e) => {
-                    setAuthEmail(e.target.value);
-                  }}
-                  required
-                  disabled={authBusy}
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  name="password"
-                  autoComplete="current-password"
-                  value={authPassword}
-                  onChange={(e) => {
-                    setAuthPassword(e.target.value);
-                  }}
-                  required
-                  minLength={1}
-                  disabled={authBusy}
-                />
-              </label>
-              <div className="form-actions">
-                <button type="button" onClick={signIn} disabled={authBusy}>
-                  Sign in
-                </button>
-                <button type="button" onClick={signUp} disabled={authBusy}>
-                  Sign up
-                </button>
-              </div>
-            </form>
-          ) : null}
-        </div>
+        <Paper withBorder p="md" radius="md" mb="md">
+          <Title order={3} size="h4" mb="sm">
+            Account
+          </Title>
+          <Stack gap="md">
+            {authError ? (
+              <Alert color="red" role="alert">
+                {authError}
+              </Alert>
+            ) : null}
+            {methods.google || methods.facebook ? (
+              <Stack gap="xs">
+                {methods.google ? (
+                  <Button
+                    component="a"
+                    href={`${apiBase()}/api/auth/google`}
+                    variant="default"
+                    fullWidth
+                  >
+                    Continue with Google
+                  </Button>
+                ) : null}
+                {methods.facebook ? (
+                  <Button
+                    component="a"
+                    href={`${apiBase()}/api/auth/facebook`}
+                    variant="default"
+                    fullWidth
+                  >
+                    Continue with Facebook
+                  </Button>
+                ) : null}
+              </Stack>
+            ) : null}
+            {methods.password && (methods.google || methods.facebook) ? (
+              <Divider label="or" labelPosition="center" />
+            ) : null}
+            {methods.password ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                }}
+              >
+                <Stack gap="sm">
+                  <TextInput
+                    label="Email"
+                    type="email"
+                    name="email"
+                    autoComplete="email"
+                    value={authEmail}
+                    onChange={(e) => {
+                      setAuthEmail(e.target.value);
+                    }}
+                    required
+                    disabled={authBusy}
+                  />
+                  <PasswordInput
+                    label="Password"
+                    name="password"
+                    autoComplete="current-password"
+                    value={authPassword}
+                    onChange={(e) => {
+                      setAuthPassword(e.target.value);
+                    }}
+                    required
+                    disabled={authBusy}
+                  />
+                  <Group gap="sm">
+                    <Button type="button" onClick={signIn} loading={authBusy}>
+                      Sign in
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={signUp}
+                      loading={authBusy}
+                    >
+                      Sign up
+                    </Button>
+                  </Group>
+                </Stack>
+              </form>
+            ) : null}
+          </Stack>
+        </Paper>
       ) : null}
 
       {!configError && health ? (
-        <div className="card">
-          <strong>API</strong>
-          <p>
+        <Paper withBorder p="md" radius="md" mb="md">
+          <Title order={3} size="h4" mb="sm">
+            API
+          </Title>
+          <Text>
             Status: {health.status}
             <br />
             Database configured: {String(health.database_configured)}
-          </p>
-        </div>
+          </Text>
+        </Paper>
       ) : null}
 
       {!configError && items ? (
-        <div className="card">
-          <strong>Items</strong>
-          {items.detail ? <p>{items.detail}</p> : null}
+        <Paper withBorder p="md" radius="md">
+          <Title order={3} size="h4" mb="sm">
+            Items
+          </Title>
+          {items.detail ? <Text mb="sm">{items.detail}</Text> : null}
           {items.items.length === 0 ? (
-            <p>No items yet.</p>
+            <Text c="dimmed">No items yet.</Text>
           ) : (
-            <ul>
+            <List>
               {items.items.map((it) => (
-                <li key={it.id}>
+                <List.Item key={it.id}>
                   #{it.id} — {it.name}
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List>
           )}
-        </div>
+        </Paper>
       ) : null}
-    </>
+    </Container>
   );
 }

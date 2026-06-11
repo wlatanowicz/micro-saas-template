@@ -6,7 +6,11 @@ from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 from src.apps.demo.models import Item  # noqa: F401 — register metadata
 from src.config import DATABASE_URL
-from src.apps.users.models import User, UserIdentity  # noqa: F401 — register metadata
+from src.apps.users.models import (  # noqa: F401 — register metadata
+    User,
+    UserIdentity,
+    VerificationCode,
+)
 
 config = context.config
 if config.config_file_name is not None:

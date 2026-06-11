@@ -7,16 +7,8 @@ from fastapi.testclient import TestClient
 
 from src.apps.users.auth import create_access_token, hash_password
 from src.apps.users.models import User, UserStatus
+from src.apps.users.tests.helpers import register_user
 from src.utils.db import session_scope
-
-
-def test_signup_without_database(client: TestClient) -> None:
-    r = client.post(
-        "/api/auth/signup",
-        json={"email": "a@b.co", "password": "password12"},
-    )
-    assert r.status_code == 503
-    assert "database" in r.json()["detail"].lower()
 
 
 def test_signin_without_database(client: TestClient) -> None:
@@ -55,12 +47,9 @@ def test_auth_config_reflects_env(auth_client: TestClient, monkeypatch) -> None:
     assert body["facebook"] is True
 
 
-def test_signup_password_disabled(auth_client: TestClient, monkeypatch) -> None:
+def test_register_send_code_password_disabled(auth_client: TestClient, monkeypatch) -> None:
     monkeypatch.setattr("src.apps.users.config.AUTH_PASSWORD_ENABLED", False)
-    r = auth_client.post(
-        "/api/auth/signup",
-        json={"email": "a@b.co", "password": "password12"},
-    )
+    r = auth_client.post("/api/auth/register/send-code", json={"email": "a@b.co"})
     assert r.status_code == 403
     assert "disabled" in r.json()["detail"].lower()
 
@@ -75,47 +64,8 @@ def test_signin_password_disabled(auth_client: TestClient, monkeypatch) -> None:
     assert "disabled" in r.json()["detail"].lower()
 
 
-@pytest.mark.parametrize(
-    ("payload", "substr"),
-    [
-        ({"email": "not-an-email", "password": "password12"}, "email"),
-        ({"email": "", "password": "password12"}, "email"),
-        ({"email": "a@b.co", "password": "short"}, "password"),
-    ],
-)
-def test_signup_validation_errors(auth_client: TestClient, payload: dict, substr: str) -> None:
-    r = auth_client.post("/api/auth/signup", json=payload)
-    assert r.status_code == 422
-    body = r.json()
-    assert substr in str(body).lower()
-
-
-def test_signup_success_normalizes_email(auth_client: TestClient) -> None:
-    r = auth_client.post(
-        "/api/auth/signup",
-        json={"email": "  Alice@Example.COM  ", "password": "password12"},
-    )
-    assert r.status_code == 201
-    data = r.json()
-    assert data["token_type"] == "bearer"
-    assert data["access_token"]
-    assert data["user"]["email"] == "alice@example.com"
-    assert data["user"]["status"] == "active"
-
-
-def test_signup_conflict_duplicate_email(auth_client: TestClient) -> None:
-    body = {"email": "dup@example.com", "password": "password12"}
-    assert auth_client.post("/api/auth/signup", json=body).status_code == 201
-    r = auth_client.post("/api/auth/signup", json=body)
-    assert r.status_code == 409
-    assert r.json()["detail"] == "email already registered"
-
-
 def test_signin_success(auth_client: TestClient) -> None:
-    auth_client.post(
-        "/api/auth/signup",
-        json={"email": "login@example.com", "password": "password12"},
-    )
+    register_user(auth_client, "login@example.com", "password12")
     r = auth_client.post(
         "/api/auth/signin",
         json={"email": "login@example.com", "password": "password12"},
@@ -138,10 +88,7 @@ def test_signin_invalid_credentials(
     email: str,
     password: str,
 ) -> None:
-    auth_client.post(
-        "/api/auth/signup",
-        json={"email": "login@example.com", "password": "password12"},
-    )
+    register_user(auth_client, "login@example.com", "password12")
     r = auth_client.post("/api/auth/signin", json={"email": email, "password": password})
     assert r.status_code == 401
     assert r.json()["detail"] == "Invalid email or password"
@@ -165,11 +112,8 @@ def test_signin_inactive_forbidden(auth_client: TestClient) -> None:
 
 
 def test_me_success(auth_client: TestClient) -> None:
-    signup = auth_client.post(
-        "/api/auth/signup",
-        json={"email": "me@example.com", "password": "password12"},
-    )
-    token = signup.json()["access_token"]
+    signup = register_user(auth_client, "me@example.com", "password12")
+    token = signup["access_token"]
     r = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     assert r.json()["email"] == "me@example.com"

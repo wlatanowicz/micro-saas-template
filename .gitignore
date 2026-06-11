@@ -37,3 +37,6 @@ frontend/dist/
 
 # Generated for serverless-python-requirements (from uv lockfile)
 backend/requirements-lambda.txt
+
+# Local notification outbox (NOTIFICATIONS_TRANSPORT=local)
+backend/var/emails/

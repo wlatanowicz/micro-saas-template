@@ -14,7 +14,6 @@ from src.apps.users.auth import (
     create_access_token,
     decode_token,
     ensure_auth_configured,
-    hash_password,
     normalize_email,
     verify_password,
 )
@@ -25,10 +24,20 @@ from src.apps.users.oauth import (
     complete_facebook_callback,
     complete_google_callback,
 )
+from src.apps.users.verification import (
+    complete_password_recovery,
+    complete_registration,
+    send_password_recovery_code,
+    send_registration_code,
+    verify_password_recovery_code,
+    verify_registration_code,
+)
 from src.utils.deps import get_db_session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 bearer = HTTPBearer(auto_error=False)
+
+SEND_CODE_MESSAGE = "If an account is eligible, a verification code has been sent."
 
 
 def _email_field(v: str) -> str:
@@ -39,14 +48,53 @@ def _email_field(v: str) -> str:
     return s
 
 
-class SignUpIn(BaseModel):
+def _code_field(v: str) -> str:
+    code = v.strip().upper()
+    if len(code) != 6 or not code.isalnum() or not code.isascii():
+        msg = "code must be 6 letters or digits"
+        raise ValueError(msg)
+    return code
+
+
+class EmailIn(BaseModel):
     email: str
-    password: str
 
     @field_validator("email")
     @classmethod
     def email_normalized(cls, v: str) -> str:
         return _email_field(v)
+
+
+class VerifyCodeIn(BaseModel):
+    email: str
+    code: str
+
+    @field_validator("email")
+    @classmethod
+    def email_normalized(cls, v: str) -> str:
+        return _email_field(v)
+
+    @field_validator("code")
+    @classmethod
+    def code_normalized(cls, v: str) -> str:
+        return _code_field(v)
+
+
+class CompletePasswordIn(BaseModel):
+    email: str
+    code: str
+    password: str
+    password_confirm: str
+
+    @field_validator("email")
+    @classmethod
+    def email_normalized(cls, v: str) -> str:
+        return _email_field(v)
+
+    @field_validator("code")
+    @classmethod
+    def code_normalized(cls, v: str) -> str:
+        return _code_field(v)
 
     @field_validator("password")
     @classmethod
@@ -85,6 +133,19 @@ class AuthConfigOut(BaseModel):
     facebook: bool
 
 
+class MessageOut(BaseModel):
+    message: str
+
+
+def _require_session(session: Session | None) -> Session:
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database not configured",
+        )
+    return session
+
+
 @router.get("/config", response_model=AuthConfigOut)
 def auth_config() -> AuthConfigOut:
     return AuthConfigOut(
@@ -94,42 +155,86 @@ def auth_config() -> AuthConfigOut:
     )
 
 
-@router.post("/signup", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
-def signup(
-    body: SignUpIn,
+@router.post("/register/send-code", response_model=MessageOut)
+def register_send_code(
+    body: EmailIn,
     session: Session | None = Depends(get_db_session),
-) -> dict:
-    if session is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="database not configured",
-        )
+) -> MessageOut:
+    db = _require_session(session)
     ensure_auth_configured()
     require_method_enabled("password")
-    existing = session.exec(select(User).where(User.email == body.email)).first()
-    if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="email already registered",
-        )
-    user = User(
+    send_registration_code(db, body.email)
+    return MessageOut(message="Verification code sent")
+
+
+@router.post("/register/verify-code", response_model=MessageOut)
+def register_verify_code(
+    body: VerifyCodeIn,
+    session: Session | None = Depends(get_db_session),
+) -> MessageOut:
+    db = _require_session(session)
+    ensure_auth_configured()
+    require_method_enabled("password")
+    verify_registration_code(db, body.email, body.code)
+    return MessageOut(message="Verification code accepted")
+
+
+@router.post("/register/complete", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
+def register_complete(
+    body: CompletePasswordIn,
+    session: Session | None = Depends(get_db_session),
+) -> dict:
+    db = _require_session(session)
+    ensure_auth_configured()
+    require_method_enabled("password")
+    return complete_registration(
+        db,
         email=body.email,
-        hashed_password=hash_password(body.password),
-        status=UserStatus.active,
+        code=body.code,
+        password=body.password,
+        password_confirm=body.password_confirm,
     )
-    session.add(user)
-    session.flush()
-    session.refresh(user)
-    token = create_access_token(user.id)
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": UserPublic(
-            id=user.id,
-            email=user.email,
-            status=user.status.value,
-        ),
-    }
+
+
+@router.post("/password-recovery/send-code", response_model=MessageOut)
+def password_recovery_send_code(
+    body: EmailIn,
+    session: Session | None = Depends(get_db_session),
+) -> MessageOut:
+    db = _require_session(session)
+    ensure_auth_configured()
+    require_method_enabled("password")
+    send_password_recovery_code(db, body.email)
+    return MessageOut(message=SEND_CODE_MESSAGE)
+
+
+@router.post("/password-recovery/verify-code", response_model=MessageOut)
+def password_recovery_verify_code(
+    body: VerifyCodeIn,
+    session: Session | None = Depends(get_db_session),
+) -> MessageOut:
+    db = _require_session(session)
+    ensure_auth_configured()
+    require_method_enabled("password")
+    verify_password_recovery_code(db, body.email, body.code)
+    return MessageOut(message="Verification code accepted")
+
+
+@router.post("/password-recovery/complete", response_model=TokenOut)
+def password_recovery_complete(
+    body: CompletePasswordIn,
+    session: Session | None = Depends(get_db_session),
+) -> dict:
+    db = _require_session(session)
+    ensure_auth_configured()
+    require_method_enabled("password")
+    return complete_password_recovery(
+        db,
+        email=body.email,
+        code=body.code,
+        password=body.password,
+        password_confirm=body.password_confirm,
+    )
 
 
 @router.post("/signin", response_model=TokenOut)

@@ -98,6 +98,20 @@ cp .env.example .env
 npm run dev
 ```
 
+## Email notifications (registration & password recovery)
+
+Verification codes are sent through the **`notifications`** app. Configure via `backend/.env.example`:
+
+| Variable | Local dev | Production |
+|----------|-----------|------------|
+| `NOTIFICATIONS_TRANSPORT` | `local` (default in Docker Compose) | `ses` |
+| `NOTIFICATIONS_FROM_EMAIL` | any placeholder | verified SES sender address |
+| `NOTIFICATIONS_EML_DIR` | optional; default `backend/var/emails/` | n/a |
+
+With **`NOTIFICATIONS_TRANSPORT=local`**, outgoing messages are written as **`.eml`** files under **`backend/var/emails/`** (gitignored) for manual review.
+
+With **`NOTIFICATIONS_TRANSPORT=ses`**, the API calls **`ses:SendEmail`** (Lambda IAM includes SES permissions). Verify the sender domain or address in Amazon SES before deploy.
+
 ## Deploy (CLI)
 
 From `backend/` (requires AWS credentials and env vars as in CI):

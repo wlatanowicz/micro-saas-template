@@ -12,6 +12,7 @@ from src.apps.users.oauth import (
     resolve_oauth_user,
     verify_oauth_state,
 )
+from src.apps.users.tests.helpers import register_user
 from src.utils.db import session_scope
 
 
@@ -44,10 +45,7 @@ def test_resolve_oauth_user_creates_user(postgres_integration) -> None:
 
 
 def test_resolve_oauth_user_auto_links_existing_email(auth_client: TestClient) -> None:
-    auth_client.post(
-        "/api/auth/signup",
-        json={"email": "link@example.com", "password": "password12"},
-    )
+    register_user(auth_client, "link@example.com", "password12")
     with session_scope() as session:
         user = resolve_oauth_user(
             session,

@@ -33,7 +33,10 @@ def _truncate_app_tables() -> None:
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(
-            text("TRUNCATE TABLE user_identities, users, items RESTART IDENTITY CASCADE"),
+            text(
+                "TRUNCATE TABLE user_identities, verification_codes, users, items "
+                "RESTART IDENTITY CASCADE"
+            ),
         )
 
 

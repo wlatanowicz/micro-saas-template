@@ -110,7 +110,7 @@ Verification codes are sent through the **`notifications`** app. Configure via `
 
 With **`NOTIFICATIONS_TRANSPORT=local`**, outgoing messages are written as **`.eml`** files under **`backend/var/emails/`** (gitignored) for manual review.
 
-With **`NOTIFICATIONS_TRANSPORT=ses`**, the API calls **`ses:SendEmail`** (Lambda IAM includes SES permissions). Verify the sender domain or address in Amazon SES before deploy.
+With **`NOTIFICATIONS_TRANSPORT=ses`**, the API calls **`ses:SendEmail`** (Lambda IAM includes SES permissions). Verify the sender domain or address in **Amazon SES in the deploy AWS account and region** (e.g. `eu-central-1`) before deploy. In GitHub Actions, **`NOTIFICATIONS_FROM_EMAIL`** defaults to **`noreply@<FRONTEND_DOMAIN_NAME>`** when **`FRONTEND_DOMAIN_NAME`** is set (override with the **`NOTIFICATIONS_FROM_EMAIL`** repository variable). SES identities are per-account and per-region; verifying a domain in one account does not apply to another.
 
 ## Deploy (CLI)
 
@@ -159,6 +159,7 @@ Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run mi
 | Variable | `AWS_REGION` | Optional; default `eu-central-1` |
 | Variable | `FRONTEND_DOMAIN_NAME` | Optional; custom SPA hostname. Use with `FRONTEND_ACM_CERT_ARN`; leave unset for default CloudFront URL only. |
 | Variable | `API_DOMAIN_NAME` | Optional; custom API hostname (e.g. `api.example.com`). When unset but `FRONTEND_DOMAIN_NAME` is set, deploy uses `api.<frontend-host>`. |
+| Variable | `NOTIFICATIONS_FROM_EMAIL` | Optional; verified SES sender (e.g. `noreply@example.com`). When unset but `FRONTEND_DOMAIN_NAME` is set, deploy uses `noreply@<frontend-host>`. |
 | Secret | `CLOUDFLARE_API_TOKEN` | Optional; DNS:Edit for zone |
 | Secret | `CLOUDFLARE_ZONE_ID` | Optional; or use `CLOUDFLARE_ZONE_NAME` |
 | Secret | `CLOUDFLARE_ZONE_NAME` | Optional; e.g. `example.com` |

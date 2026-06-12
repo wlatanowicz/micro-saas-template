@@ -469,6 +469,17 @@ read -rp "API_DOMAIN_NAME [Enter to keep]: " NEW_API_DOM
 API_DOMAIN_NAME="${NEW_API_DOM:-$API_DOMAIN_NAME}"
 
 echo ""
+echo "=== Email notifications (Amazon SES) ==="
+: "${NOTIFICATIONS_FROM_EMAIL:=}"
+if [[ -z "${NOTIFICATIONS_FROM_EMAIL}" && -n "${FRONTEND_DOMAIN_NAME}" ]]; then
+  NOTIFICATIONS_FROM_EMAIL="noreply@${FRONTEND_DOMAIN_NAME}"
+fi
+[[ -n "${NOTIFICATIONS_FROM_EMAIL}" ]] && echo "Current NOTIFICATIONS_FROM_EMAIL from .env.gha:" && printf '%s\n' "$NOTIFICATIONS_FROM_EMAIL"
+echo "Verify this sender (or its domain) in Amazon SES in ${REGION} before deploy."
+read -rp "NOTIFICATIONS_FROM_EMAIL [Enter to keep]: " NEW_FROM
+NOTIFICATIONS_FROM_EMAIL="${NEW_FROM:-$NOTIFICATIONS_FROM_EMAIL}"
+
+echo ""
 echo "=== Optional: Cloudflare DNS automation ==="
 : "${CLOUDFLARE_API_TOKEN:=}"
 : "${CLOUDFLARE_ZONE_ID:=}"
@@ -496,6 +507,7 @@ write_env_file() {
     AWS_REGION="$REGION" \
     FRONTEND_DOMAIN_NAME="${FRONTEND_DOMAIN_NAME:-}" \
     API_DOMAIN_NAME="${API_DOMAIN_NAME:-}" \
+    NOTIFICATIONS_FROM_EMAIL="${NOTIFICATIONS_FROM_EMAIL:-}" \
     python3 - "$target" <<'PY'
 import os
 import pathlib
@@ -524,6 +536,7 @@ lines = [
     f"AWS_REGION={shlex.quote(os.environ.get('AWS_REGION', ''))}",
     f"FRONTEND_DOMAIN_NAME={shlex.quote(os.environ.get('FRONTEND_DOMAIN_NAME', ''))}",
     f"API_DOMAIN_NAME={shlex.quote(os.environ.get('API_DOMAIN_NAME', ''))}",
+    f"NOTIFICATIONS_FROM_EMAIL={shlex.quote(os.environ.get('NOTIFICATIONS_FROM_EMAIL', ''))}",
     "",
 ]
 text = "\n".join(lines) + "\n"

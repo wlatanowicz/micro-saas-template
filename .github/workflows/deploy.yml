@@ -29,6 +29,8 @@ jobs:
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
       API_ACM_CERT_ARN: ${{ secrets.API_ACM_CERT_ARN }}
       API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME != '' && vars.API_DOMAIN_NAME || (vars.FRONTEND_DOMAIN_NAME != '' && format('api.{0}', vars.FRONTEND_DOMAIN_NAME) || '') }}
+      NOTIFICATIONS_TRANSPORT: ses
+      NOTIFICATIONS_FROM_EMAIL: ${{ vars.NOTIFICATIONS_FROM_EMAIL != '' && vars.NOTIFICATIONS_FROM_EMAIL || (vars.FRONTEND_DOMAIN_NAME != '' && format('noreply@{0}', vars.FRONTEND_DOMAIN_NAME) || '') }}
 
     steps:
       - name: Checkout

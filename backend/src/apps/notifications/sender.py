@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from src.apps.notifications.config import NOTIFICATIONS_TRANSPORT
 from src.apps.notifications.transports import local_eml, ses
 from src.utils.env import ConfigurationError
@@ -15,6 +17,12 @@ def send_email(
 ) -> None:
     transport = (NOTIFICATIONS_TRANSPORT or "local").lower()
     if transport == "local":
+        if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            msg = (
+                "NOTIFICATIONS_TRANSPORT=local is not supported on AWS Lambda; "
+                "set NOTIFICATIONS_TRANSPORT=ses"
+            )
+            raise ConfigurationError(msg)
         local_eml.write_eml(
             to=to,
             subject=subject,

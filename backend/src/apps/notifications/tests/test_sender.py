@@ -1,5 +1,4 @@
 import pytest
-
 from src.apps.notifications import sender
 from src.utils.env import ConfigurationError
 

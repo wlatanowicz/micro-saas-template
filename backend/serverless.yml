@@ -63,7 +63,7 @@ provider:
     AUTH_FACEBOOK_APP_SECRET: ${env:AUTH_FACEBOOK_APP_SECRET, ''}
     AUTH_FRONTEND_URL: ${env:AUTH_FRONTEND_URL, ''}
     NOTIFICATIONS_TRANSPORT: ${env:NOTIFICATIONS_TRANSPORT, 'ses'}
-    NOTIFICATIONS_FROM_EMAIL: ${env:NOTIFICATIONS_FROM_EMAIL, 'noreply@latanowicz.com'}
+    NOTIFICATIONS_FROM_EMAIL: ${env:NOTIFICATIONS_FROM_EMAIL, 'noreply@wiktor.latanowicz.com'}
   iam:
     role:
       statements:

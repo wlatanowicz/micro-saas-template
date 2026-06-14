@@ -192,7 +192,7 @@ def complete_registration(
 
 def send_password_recovery_code(session: Session, email: str) -> None:
     user = session.exec(select(User).where(User.email == email)).first()
-    if user is None or user.hashed_password is None:
+    if user is None:
         return
     code = generate_code()
     now = _now()
@@ -250,7 +250,7 @@ def complete_password_recovery(
             detail=f"password must be at least {MIN_PASSWORD_LENGTH} characters",
         )
     user = session.exec(select(User).where(User.email == email)).first()
-    if user is None or user.hashed_password is None:
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid verification code",

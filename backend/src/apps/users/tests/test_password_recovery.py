@@ -80,11 +80,35 @@ def test_password_recovery_oauth_only_user(auth_client: TestClient) -> None:
         json={"email": "oauth@example.com"},
     )
     assert r.status_code == 200
+    code = _latest_code("oauth@example.com", VerificationPurpose.password_recovery)
+    assert (
+        auth_client.post(
+            "/api/auth/password-recovery/verify-code",
+            json={"email": "oauth@example.com", "code": code},
+        ).status_code
+        == 200
+    )
+    complete = auth_client.post(
+        "/api/auth/password-recovery/complete",
+        json={
+            "email": "oauth@example.com",
+            "code": code,
+            "password": "newpassword12",
+            "password_confirm": "newpassword12",
+        },
+    )
+    assert complete.status_code == 200
+    signin = auth_client.post(
+        "/api/auth/signin",
+        json={"email": "oauth@example.com", "password": "newpassword12"},
+    )
+    assert signin.status_code == 200
     with session_scope() as session:
-        record = session.exec(
-            select(VerificationCode).where(VerificationCode.email == "oauth@example.com")
+        identity = session.exec(
+            select(UserIdentity).where(UserIdentity.user_id == user.id),
         ).first()
-        assert record is None
+        assert identity is not None
+        assert identity.provider == AuthProvider.google
 
 
 def test_password_recovery_invalid_code(auth_client: TestClient) -> None:

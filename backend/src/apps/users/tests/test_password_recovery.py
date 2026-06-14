@@ -10,7 +10,6 @@ from src.apps.users.models import (
     User,
     UserIdentity,
     UserStatus,
-    VerificationCode,
     VerificationPurpose,
 )
 from src.apps.users.tests.helpers import _latest_code, register_user

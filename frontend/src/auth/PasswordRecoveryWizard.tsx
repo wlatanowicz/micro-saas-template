@@ -2,6 +2,7 @@ import { Button, Group, PasswordInput, Stack, Stepper, Text, TextInput } from "@
 import { useState } from "react";
 
 import { recoveryComplete, recoverySendCode, recoveryVerifyCode } from "./api";
+import { SixCharCodeInput } from "./SixCharCodeInput";
 import type { MeUser } from "./types";
 
 type PasswordRecoveryWizardProps = {
@@ -123,14 +124,10 @@ export function PasswordRecoveryWizard({
             <Text size="sm" c="dimmed">
               If an account exists for {email || "this email"}, we sent a 6-character code.
             </Text>
-            <TextInput
+            <SixCharCodeInput
               label="Recovery code"
               value={code}
-              onChange={(e) => {
-                setCode(e.target.value.toUpperCase());
-              }}
-              maxLength={6}
-              required
+              onChange={setCode}
               disabled={busy}
             />
             <Group gap="sm">

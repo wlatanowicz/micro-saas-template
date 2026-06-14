@@ -2,6 +2,7 @@ import { Button, Group, PasswordInput, Stack, Stepper, Text, TextInput } from "@
 import { useState } from "react";
 
 import { registerComplete, registerSendCode, registerVerifyCode } from "./api";
+import { SixCharCodeInput } from "./SixCharCodeInput";
 import type { MeUser } from "./types";
 
 type SignUpWizardProps = {
@@ -123,14 +124,10 @@ export function SignUpWizard({
             <Text size="sm" c="dimmed">
               We sent a 6-character code to {email || "your email"}.
             </Text>
-            <TextInput
+            <SixCharCodeInput
               label="Verification code"
               value={code}
-              onChange={(e) => {
-                setCode(e.target.value.toUpperCase());
-              }}
-              maxLength={6}
-              required
+              onChange={setCode}
               disabled={busy}
             />
             <Group gap="sm">

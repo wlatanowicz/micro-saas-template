@@ -5,12 +5,13 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 from src.apps.demo.models import Item  # noqa: F401 — register metadata
-from src.config import DATABASE_URL
 from src.apps.users.models import (  # noqa: F401 — register metadata
     User,
     UserIdentity,
     VerificationCode,
 )
+from src.config import DATABASE_URL
+from src.scheduler.models import SchedulerTaskRun  # noqa: F401 — register metadata
 
 config = context.config
 if config.config_file_name is not None:

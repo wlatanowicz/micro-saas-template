@@ -95,6 +95,7 @@ functions:
         - "!src/**/tests/**"
         - "!src/migrate_handler.py"
         - "!src/scheduler_handler.py"
+        - "!src/cron_handler.py"
     events:
       - httpApi:
           path: /
@@ -125,6 +126,23 @@ functions:
         - "!src/**/tests/**"
         - "!src/handler.py"
         - "!src/migrate_handler.py"
+        - "!src/cron_handler.py"
+
+  cron:
+    handler: src.cron_handler.handler
+    timeout: 120
+    memorySize: 512
+    description: Enqueue due scheduled tasks (hourly tick)
+    events:
+      - schedule: rate(1 hour)
+    package:
+      patterns:
+        - "!alembic/**"
+        - "!alembic.ini"
+        - "!src/**/tests/**"
+        - "!src/handler.py"
+        - "!src/migrate_handler.py"
+        - "!src/scheduler_handler.py"
 
 package:
   individually: true

@@ -64,6 +64,8 @@ provider:
     AUTH_FRONTEND_URL: ${env:AUTH_FRONTEND_URL, ''}
     NOTIFICATIONS_TRANSPORT: ${env:NOTIFICATIONS_TRANSPORT, 'ses'}
     NOTIFICATIONS_FROM_EMAIL: ${env:NOTIFICATIONS_FROM_EMAIL, ''}
+    BACKGROUND_TRANSPORT: ${env:BACKGROUND_TRANSPORT, 'sqs'}
+    BACKGROUND_QUEUE_MESSAGES_URL: !Ref MessagesQueue
   iam:
     role:
       statements:
@@ -72,6 +74,16 @@ provider:
             - ses:SendEmail
             - ses:SendRawEmail
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource: !GetAtt MessagesQueue.Arn
+        - Effect: Allow
+          Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource: !GetAtt MessagesQueue.Arn
 
 functions:
   api:
@@ -82,6 +94,7 @@ functions:
         - "!alembic.ini"
         - "!src/**/tests/**"
         - "!src/migrate_handler.py"
+        - "!src/background_handler.py"
     events:
       - httpApi:
           path: /
@@ -95,6 +108,23 @@ functions:
     timeout: 120
     memorySize: 512
     description: Alembic upgrade head (invoke after deploy)
+
+  background:
+    handler: src.background_handler.handler
+    timeout: 120
+    memorySize: 512
+    description: Process background tasks from SQS
+    events:
+      - sqs:
+          arn: !GetAtt MessagesQueue.Arn
+          batchSize: 1
+    package:
+      patterns:
+        - "!alembic/**"
+        - "!alembic.ini"
+        - "!src/**/tests/**"
+        - "!src/handler.py"
+        - "!src/migrate_handler.py"
 
 package:
   individually: true
@@ -226,6 +256,20 @@ resources:
         ApiId: !Ref HttpApi
         Stage: $default
 
+    MessagesDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: !Sub "${self:service}-${self:provider.stage}-messages-dlq"
+
+    MessagesQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: !Sub "${self:service}-${self:provider.stage}-messages"
+        VisibilityTimeout: 360
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt MessagesDeadLetterQueue.Arn
+          maxReceiveCount: 3
+
   Outputs:
     FrontendBucketName:
       Value: !Ref FrontendBucket
@@ -266,3 +310,7 @@ resources:
       Description: Physical name of the migration Lambda (invoke after deploy)
       Value:
         Ref: MigrateLambdaFunction
+
+    MessagesQueueUrl:
+      Description: SQS queue URL for MESSAGES background tasks
+      Value: !Ref MessagesQueue

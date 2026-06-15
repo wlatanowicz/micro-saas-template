@@ -7,7 +7,7 @@ from src.apps.notifications import service
 from src.apps.notifications.tasks import send_templated_email_task
 
 
-def test_send_templated_email_enqueues_background_task(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_send_templated_email_enqueues_scheduled_task(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_enqueue = MagicMock()
     monkeypatch.setattr(send_templated_email_task, "enqueue", mock_enqueue)
     service.send_templated_email(

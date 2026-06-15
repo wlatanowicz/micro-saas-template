@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from src import background
-from src.background.registry import TASK_REGISTRY
+from src import scheduler
+from src.scheduler.registry import TASK_REGISTRY
 
 
 def test_task_registers_in_global_registry() -> None:
     TASK_REGISTRY.clear()
 
-    @background.task(queue="MESSAGES")
+    @scheduler.task(queue="MESSAGES")
     def send_message(sender: str, recipient: str, body: str) -> None:
         del sender, recipient, body
 
@@ -23,7 +23,7 @@ def test_task_registers_in_global_registry() -> None:
 def test_wrapped_function_has_enqueue() -> None:
     TASK_REGISTRY.clear()
 
-    @background.task(queue="MESSAGES")
+    @scheduler.task(queue="MESSAGES")
     def send_message(sender: str, recipient: str, body: str) -> None:
         del sender, recipient, body
 

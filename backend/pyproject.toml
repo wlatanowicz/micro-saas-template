@@ -47,5 +47,5 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src/apps/users/tests", "src/apps/notifications/tests", "src/background/tests"]
+testpaths = ["tests", "src/apps/users/tests", "src/apps/notifications/tests", "src/scheduler/tests"]
 pythonpath = ["."]

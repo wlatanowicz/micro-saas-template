@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from src import background
+from src import scheduler
 
 EXECUTIONS: list[tuple[tuple[object, ...], dict[str, object]]] = []
 
 
-@background.task(queue="MESSAGES")
+@scheduler.task(queue="MESSAGES")
 def sample_task(value: str, *, flag: bool = False) -> str:
     EXECUTIONS.append(((value,), {"flag": flag}))
     return f"{value}:{flag}"

@@ -64,8 +64,8 @@ provider:
     AUTH_FRONTEND_URL: ${env:AUTH_FRONTEND_URL, ''}
     NOTIFICATIONS_TRANSPORT: ${env:NOTIFICATIONS_TRANSPORT, 'ses'}
     NOTIFICATIONS_FROM_EMAIL: ${env:NOTIFICATIONS_FROM_EMAIL, ''}
-    BACKGROUND_TRANSPORT: ${env:BACKGROUND_TRANSPORT, 'sqs'}
-    BACKGROUND_QUEUE_MESSAGES_URL: !Ref MessagesQueue
+    SCHEDULER_TRANSPORT: ${env:SCHEDULER_TRANSPORT, 'sqs'}
+    SCHEDULER_QUEUE_MESSAGES_URL: !Ref MessagesQueue
   iam:
     role:
       statements:
@@ -94,7 +94,7 @@ functions:
         - "!alembic.ini"
         - "!src/**/tests/**"
         - "!src/migrate_handler.py"
-        - "!src/background_handler.py"
+        - "!src/scheduler_handler.py"
     events:
       - httpApi:
           path: /
@@ -109,11 +109,11 @@ functions:
     memorySize: 512
     description: Alembic upgrade head (invoke after deploy)
 
-  background:
-    handler: src.background_handler.handler
+  scheduler:
+    handler: src.scheduler_handler.handler
     timeout: 120
     memorySize: 512
-    description: Process background tasks from SQS
+    description: Process scheduled tasks from SQS
     events:
       - sqs:
           arn: !GetAtt MessagesQueue.Arn
@@ -312,5 +312,5 @@ resources:
         Ref: MigrateLambdaFunction
 
     MessagesQueueUrl:
-      Description: SQS queue URL for MESSAGES background tasks
+      Description: SQS queue URL for MESSAGES scheduled tasks
       Value: !Ref MessagesQueue

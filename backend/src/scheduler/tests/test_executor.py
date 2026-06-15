@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.background.executor import execute_task
-from src.background.tests import sample_tasks
+from src.scheduler.executor import execute_task
+from src.scheduler.tests import sample_tasks
 
 
 def test_execute_task_imports_and_runs_function() -> None:

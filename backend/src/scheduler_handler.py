@@ -1,4 +1,4 @@
-"""Lambda entrypoint: process background tasks from SQS."""
+"""Lambda entrypoint: process scheduled tasks from SQS."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from src.background.executor import execute_task
+from src.scheduler.executor import execute_task
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -31,7 +31,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, int]:
         if not isinstance(kwargs, dict):
             msg = f"payload kwargs must be a dict, got {type(kwargs).__name__}"
             raise TypeError(msg)
-        logger.info("Running background task %s", function_path)
+        logger.info("Running scheduled task %s", function_path)
         execute_task(function_path, args, kwargs)
         processed += 1
     return {"processed": processed}

@@ -4,8 +4,8 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar
 
-from src.background.enqueue import enqueue_task
-from src.background.registry import TASK_REGISTRY, RegisteredTask
+from src.scheduler.enqueue import enqueue_task
+from src.scheduler.registry import TASK_REGISTRY, RegisteredTask
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 

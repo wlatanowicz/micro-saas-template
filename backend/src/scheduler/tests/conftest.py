@@ -4,7 +4,7 @@ import importlib
 
 import pytest
 
-from src.background.tests import sample_tasks
+from src.scheduler.tests import sample_tasks
 
 
 @pytest.fixture(autouse=True)

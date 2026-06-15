@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.background.tests import sample_tasks
+from src.scheduler.tests import sample_tasks
 from src.utils.env import ConfigurationError
 
 
 def test_sqs_transport_sends_json_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.background.config.BACKGROUND_TRANSPORT", "sqs")
-    monkeypatch.setenv("BACKGROUND_QUEUE_MESSAGES_URL", "https://example.com/queue")
+    monkeypatch.setattr("src.scheduler.config.SCHEDULER_TRANSPORT", "sqs")
+    monkeypatch.setenv("SCHEDULER_QUEUE_MESSAGES_URL", "https://example.com/queue")
     monkeypatch.setenv("AWS_REGION", "eu-central-1")
 
     mock_client = MagicMock()
@@ -34,7 +34,7 @@ def test_sqs_transport_sends_json_payload(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_sqs_transport_requires_queue_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.background.config.BACKGROUND_TRANSPORT", "sqs")
-    monkeypatch.delenv("BACKGROUND_QUEUE_MESSAGES_URL", raising=False)
-    with pytest.raises(ConfigurationError, match="BACKGROUND_QUEUE_MESSAGES_URL"):
+    monkeypatch.setattr("src.scheduler.config.SCHEDULER_TRANSPORT", "sqs")
+    monkeypatch.delenv("SCHEDULER_QUEUE_MESSAGES_URL", raising=False)
+    with pytest.raises(ConfigurationError, match="SCHEDULER_QUEUE_MESSAGES_URL"):
         sample_tasks.sample_task.enqueue("hello")

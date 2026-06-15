@@ -8,7 +8,7 @@ _TEMPLATE_SUBJECTS = {
 }
 
 
-def send_templated_email(
+def deliver_templated_email(
     template_base: str,
     *,
     to: str,
@@ -24,4 +24,21 @@ def send_templated_email(
         plain_body=plain_body,
         html_body=html_body,
         purpose=purpose or template_base,
+    )
+
+
+def send_templated_email(
+    template_base: str,
+    *,
+    to: str,
+    context: dict[str, str],
+    purpose: str | None = None,
+) -> None:
+    from src.apps.notifications.tasks import send_templated_email_task
+
+    send_templated_email_task.enqueue(
+        template_base,
+        to=to,
+        context=context,
+        purpose=purpose,
     )

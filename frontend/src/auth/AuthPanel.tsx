@@ -1,5 +1,6 @@
 import { Alert, Button, Divider, Paper, Stack, Title } from "@mantine/core";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { apiBase } from "./api";
 import { PasswordRecoveryWizard } from "./PasswordRecoveryWizard";
@@ -16,6 +17,7 @@ type AuthPanelProps = {
 };
 
 export function AuthPanel({ authConfig, onSession, initialError = null }: AuthPanelProps) {
+  const { t } = useTranslation();
   const [view, setView] = useState<AuthView>("signin");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
@@ -29,10 +31,10 @@ export function AuthPanel({ authConfig, onSession, initialError = null }: AuthPa
 
   const title =
     view === "signup"
-      ? "Create account"
+      ? t("auth.createAccount")
       : view === "recovery"
-        ? "Reset password"
-        : "Sign in";
+        ? t("auth.resetPassword")
+        : t("auth.signIn");
 
   return (
     <Paper withBorder p="md" radius="md" mb="md">
@@ -54,7 +56,7 @@ export function AuthPanel({ authConfig, onSession, initialError = null }: AuthPa
                 variant="default"
                 fullWidth
               >
-                Continue with Google
+                {t("auth.continueWithGoogle")}
               </Button>
             ) : null}
             {methods.facebook ? (
@@ -64,13 +66,13 @@ export function AuthPanel({ authConfig, onSession, initialError = null }: AuthPa
                 variant="default"
                 fullWidth
               >
-                Continue with Facebook
+                {t("auth.continueWithFacebook")}
               </Button>
             ) : null}
           </Stack>
         ) : null}
         {view === "signin" && methods.password && (methods.google || methods.facebook) ? (
-          <Divider label="or" labelPosition="center" />
+          <Divider label={t("auth.or")} labelPosition="center" />
         ) : null}
         {view === "signin" && methods.password ? (
           <SignInForm

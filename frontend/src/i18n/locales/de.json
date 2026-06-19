@@ -1,0 +1,95 @@
+{
+  "app": {
+    "title": "Micro-SaaS-Vorlage",
+    "subtitle": "React-Frontend für die FastAPI Lambda API.",
+    "notSignedIn": "Nicht angemeldet",
+    "signOut": "Abmelden"
+  },
+  "api": {
+    "title": "API",
+    "status": "Status:",
+    "databaseConfigured": "Datenbank konfiguriert:"
+  },
+  "items": {
+    "title": "Elemente",
+    "empty": "Noch keine Elemente."
+  },
+  "errors": {
+    "configuration": "Konfigurationsfehler",
+    "requestFailed": "Anfrage fehlgeschlagen",
+    "apiBaseNotSet": "VITE_API_BASE_URL ist nicht gesetzt. Für lokale Entwicklung oder Deployment konfigurieren.",
+    "healthCheckFailed": "Gesundheitsprüfung fehlgeschlagen: {{status}}",
+    "itemsRequestFailed": "Elementanfrage fehlgeschlagen: {{status}}",
+    "api": {
+      "database_not_configured": "Die Datenbank ist nicht konfiguriert.",
+      "auth_not_configured": "Authentifizierung ist nicht konfiguriert.",
+      "auth_invalid_credentials": "Ungültige E-Mail oder Passwort.",
+      "account_not_active": "Dieses Konto ist nicht aktiv.",
+      "not_authenticated": "Sie sind nicht angemeldet.",
+      "invalid_or_expired_token": "Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.",
+      "invalid_token": "Ungültiges Sitzungstoken.",
+      "user_not_found": "Benutzer nicht gefunden.",
+      "auth_method_disabled": "{{method}}-Authentifizierung ist deaktiviert.",
+      "oauth_provider_not_configured": "{{provider}}-Anmeldung ist nicht konfiguriert.",
+      "verification_code_expired": "Der Bestätigungscode ist abgelaufen.",
+      "invalid_verification_code": "Ungültiger Bestätigungscode.",
+      "email_already_registered": "Diese E-Mail ist bereits registriert.",
+      "passwords_do_not_match": "Passwörter stimmen nicht überein.",
+      "auth_password_too_short": "Das Passwort muss mindestens {{min_length}} Zeichen haben.",
+      "verification_code_not_verified": "Bitte bestätigen Sie zuerst Ihren Code.",
+      "invalid_oauth_state": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+      "identity_references_missing_user": "Anmeldung fehlgeschlagen. Bitte Support kontaktieren.",
+      "oauth_authorization_failed": "Anmeldung mit dem Anbieter fehlgeschlagen. Bitte erneut versuchen.",
+      "oauth_profile_missing": "Anmeldung fehlgeschlagen. Profilinformationen fehlen.",
+      "oauth_email_not_available": "Anmeldung fehlgeschlagen. E-Mail vom Anbieter nicht verfügbar.",
+      "request_validation_error": "Bitte Eingaben prüfen und erneut versuchen."
+    }
+  },
+  "auth": {
+    "signIn": "Anmelden",
+    "createAccount": "Konto erstellen",
+    "resetPassword": "Passwort zurücksetzen",
+    "continueWithGoogle": "Mit Google fortfahren",
+    "continueWithFacebook": "Mit Facebook fortfahren",
+    "or": "oder",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "sendCode": "Code senden",
+    "backToSignIn": "Zurück zur Anmeldung",
+    "verifyCode": "Code bestätigen",
+    "resendCode": "Code erneut senden",
+    "confirmPassword": "Passwort bestätigen",
+    "newPassword": "Neues Passwort",
+    "confirmNewPassword": "Neues Passwort bestätigen",
+    "sendRecoveryCode": "Wiederherstellungscode senden",
+    "verificationCode": "Bestätigungscode",
+    "recoveryCode": "Wiederherstellungscode",
+    "steps": {
+      "email": "E-Mail",
+      "code": "Code",
+      "password": "Passwort",
+      "enterEmail": "E-Mail eingeben",
+      "enterVerificationCode": "Bestätigungscode eingeben",
+      "setPassword": "Passwort festlegen",
+      "confirmAccount": "Konto bestätigen",
+      "enterRecoveryCode": "Wiederherstellungscode eingeben",
+      "chooseNewPassword": "Neues Passwort wählen"
+    },
+    "signup": {
+      "codeSent": "Wir haben einen 6-stelligen Code an {{email}} gesendet.",
+      "yourEmail": "Ihre E-Mail"
+    },
+    "recovery": {
+      "codeSent": "Wenn ein Konto für {{email}} existiert, haben wir einen 6-stelligen Code gesendet.",
+      "thisEmail": "diese E-Mail"
+    }
+  },
+  "language": {
+    "label": "Sprache",
+    "en": "Englisch",
+    "pl": "Polnisch",
+    "uk": "Ukrainisch",
+    "de": "Deutsch"
+  }
+}

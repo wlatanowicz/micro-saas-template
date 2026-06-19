@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from sqlmodel import select
 
+from src.apps.users.api_errors import ApiErrorCode
 from src.apps.users.models import (
     AuthProvider,
     User,
@@ -124,4 +125,4 @@ def test_password_recovery_invalid_code(auth_client: TestClient) -> None:
         json={"email": "badrecover@example.com", "code": "BADBAD"},
     )
     assert r.status_code == 400
-    assert r.json()["detail"] == "Invalid verification code"
+    assert r.json()["detail"]["code"] == ApiErrorCode.invalid_verification_code

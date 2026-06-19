@@ -11,9 +11,11 @@ from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
 
 from src.apps.users import config
+from src.apps.users.api_errors import ApiErrorCode
 from src.apps.users.auth import create_access_token, normalize_email
 from src.apps.users.guards import AuthProviderName
 from src.apps.users.models import AuthProvider, User, UserIdentity, UserStatus
+from src.utils.api_errors import CommonApiErrorCode, api_error_code_from_detail, raise_api_error
 
 oauth = OAuth()
 _registered = False
@@ -81,10 +83,18 @@ def verify_oauth_state(state: str, provider: AuthProviderName) -> None:
         raise RuntimeError(msg)
     try:
         payload = jwt.decode(state, secret, algorithms=["HS256"])
-    except jwt.PyJWTError as e:
-        raise HTTPException(status_code=400, detail="invalid oauth state") from e
+    except jwt.PyJWTError:
+        raise_api_error(
+            ApiErrorCode.invalid_oauth_state,
+            "invalid oauth state",
+            status_code=400,
+        )
     if payload.get("purpose") != "oauth_state" or payload.get("provider") != provider:
-        raise HTTPException(status_code=400, detail="invalid oauth state")
+        raise_api_error(
+            ApiErrorCode.invalid_oauth_state,
+            "invalid oauth state",
+            status_code=400,
+        )
 
 
 def build_redirect_uri(request: Request, callback_name: str) -> str:
@@ -99,11 +109,18 @@ def oauth_success_redirect(user: User) -> RedirectResponse:
     )
 
 
-def oauth_error_redirect(message: str) -> RedirectResponse:
+def oauth_error_redirect(code: str) -> RedirectResponse:
     return RedirectResponse(
-        url=f"{config.AUTH_FRONTEND_URL}#auth_error={quote(message)}",
+        url=f"{config.AUTH_FRONTEND_URL}#auth_error_code={quote(code)}",
         status_code=302,
     )
+
+
+def _oauth_error_redirect_from_exception(exc: HTTPException) -> RedirectResponse:
+    code = api_error_code_from_detail(exc.detail)
+    if code is None:
+        code = CommonApiErrorCode.request_validation_error
+    return oauth_error_redirect(code)
 
 
 def resolve_oauth_user(
@@ -122,9 +139,17 @@ def resolve_oauth_user(
     if identity is not None:
         user = session.get(User, identity.user_id)
         if user is None:
-            raise HTTPException(status_code=500, detail="identity references missing user")
+            raise_api_error(
+                ApiErrorCode.identity_references_missing_user,
+                "identity references missing user",
+                status_code=500,
+            )
         if user.status != UserStatus.active:
-            raise HTTPException(status_code=403, detail="Account is not active")
+            raise_api_error(
+                ApiErrorCode.account_not_active,
+                "Account is not active",
+                status_code=403,
+            )
         return user
 
     user = session.exec(select(User).where(User.email == normalized_email)).first()
@@ -138,7 +163,11 @@ def resolve_oauth_user(
         )
         session.flush()
         if user.status != UserStatus.active:
-            raise HTTPException(status_code=403, detail="Account is not active")
+            raise_api_error(
+                ApiErrorCode.account_not_active,
+                "Account is not active",
+                status_code=403,
+            )
         return user
 
     user = User(email=normalized_email, hashed_password=None, status=UserStatus.active)
@@ -166,7 +195,12 @@ async def authorize_redirect(
     redirect_uri = build_redirect_uri(request, callback_name)
     client = oauth.create_client(provider)
     if client is None:
-        raise HTTPException(status_code=503, detail=f"{provider} oauth client not configured")
+        raise_api_error(
+            ApiErrorCode.oauth_provider_not_configured,
+            f"{provider} oauth client not configured",
+            status_code=503,
+            params={"provider": provider},
+        )
     return await client.authorize_redirect(request, redirect_uri, state=state)
 
 
@@ -176,22 +210,22 @@ async def complete_google_callback(request: Request, session: Session) -> Redire
     verify_oauth_state(state, "google")
     client = oauth.create_client("google")
     if client is None:
-        return oauth_error_redirect("google oauth client not configured")
+        return oauth_error_redirect(ApiErrorCode.oauth_provider_not_configured)
     try:
         token = await client.authorize_access_token(request)
     except Exception:
-        return oauth_error_redirect("oauth authorization failed")
+        return oauth_error_redirect(ApiErrorCode.oauth_authorization_failed)
     userinfo = token.get("userinfo")
     if not userinfo:
-        return oauth_error_redirect("oauth profile missing")
+        return oauth_error_redirect(ApiErrorCode.oauth_profile_missing)
     subject = userinfo.get("sub")
     email = userinfo.get("email")
     if not subject or not email:
-        return oauth_error_redirect("oauth email not available")
+        return oauth_error_redirect(ApiErrorCode.oauth_email_not_available)
     try:
         user = resolve_oauth_user(session, AuthProvider.google, str(subject), str(email))
     except HTTPException as exc:
-        return oauth_error_redirect(str(exc.detail))
+        return _oauth_error_redirect_from_exception(exc)
     return oauth_success_redirect(user)
 
 
@@ -201,19 +235,19 @@ async def complete_facebook_callback(request: Request, session: Session) -> Redi
     verify_oauth_state(state, "facebook")
     client = oauth.create_client("facebook")
     if client is None:
-        return oauth_error_redirect("facebook oauth client not configured")
+        return oauth_error_redirect(ApiErrorCode.oauth_provider_not_configured)
     try:
         token = await client.authorize_access_token(request)
         resp = await client.get("me?fields=id,email", token=token)
         profile = resp.json()
     except Exception:
-        return oauth_error_redirect("oauth authorization failed")
+        return oauth_error_redirect(ApiErrorCode.oauth_authorization_failed)
     subject = profile.get("id")
     email = profile.get("email")
     if not subject or not email:
-        return oauth_error_redirect("oauth email not available")
+        return oauth_error_redirect(ApiErrorCode.oauth_email_not_available)
     try:
         user = resolve_oauth_user(session, AuthProvider.facebook, str(subject), str(email))
     except HTTPException as exc:
-        return oauth_error_redirect(str(exc.detail))
+        return _oauth_error_redirect_from_exception(exc)
     return oauth_success_redirect(user)

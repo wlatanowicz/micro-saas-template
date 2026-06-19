@@ -1,0 +1,95 @@
+{
+  "app": {
+    "title": "Micro-SaaS template",
+    "subtitle": "React frontend talking to the FastAPI Lambda API.",
+    "notSignedIn": "Not signed in",
+    "signOut": "Sign out"
+  },
+  "api": {
+    "title": "API",
+    "status": "Status:",
+    "databaseConfigured": "Database configured:"
+  },
+  "items": {
+    "title": "Items",
+    "empty": "No items yet."
+  },
+  "errors": {
+    "configuration": "Configuration error",
+    "requestFailed": "Request failed",
+    "apiBaseNotSet": "VITE_API_BASE_URL is not set. Configure it for local dev or deploy.",
+    "healthCheckFailed": "Health check failed: {{status}}",
+    "itemsRequestFailed": "Items request failed: {{status}}",
+    "api": {
+      "database_not_configured": "The database is not configured.",
+      "auth_not_configured": "Authentication is not configured.",
+      "auth_invalid_credentials": "Invalid email or password.",
+      "account_not_active": "This account is not active.",
+      "not_authenticated": "You are not signed in.",
+      "invalid_or_expired_token": "Your session has expired. Please sign in again.",
+      "invalid_token": "Invalid session token.",
+      "user_not_found": "User not found.",
+      "auth_method_disabled": "{{method}} authentication is disabled.",
+      "oauth_provider_not_configured": "{{provider}} sign-in is not configured.",
+      "verification_code_expired": "The verification code has expired.",
+      "invalid_verification_code": "Invalid verification code.",
+      "email_already_registered": "This email is already registered.",
+      "passwords_do_not_match": "Passwords do not match.",
+      "auth_password_too_short": "Password must be at least {{min_length}} characters.",
+      "verification_code_not_verified": "Please verify your code first.",
+      "invalid_oauth_state": "Sign-in could not be completed. Please try again.",
+      "identity_references_missing_user": "Sign-in could not be completed. Please contact support.",
+      "oauth_authorization_failed": "Sign-in with the provider failed. Please try again.",
+      "oauth_profile_missing": "Sign-in could not be completed. Profile information is missing.",
+      "oauth_email_not_available": "Sign-in could not be completed. Email is not available from the provider.",
+      "request_validation_error": "Please check your input and try again."
+    }
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "resetPassword": "Reset password",
+    "continueWithGoogle": "Continue with Google",
+    "continueWithFacebook": "Continue with Facebook",
+    "or": "or",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "sendCode": "Send code",
+    "backToSignIn": "Back to sign in",
+    "verifyCode": "Verify code",
+    "resendCode": "Resend code",
+    "confirmPassword": "Confirm password",
+    "newPassword": "New password",
+    "confirmNewPassword": "Confirm new password",
+    "sendRecoveryCode": "Send recovery code",
+    "verificationCode": "Verification code",
+    "recoveryCode": "Recovery code",
+    "steps": {
+      "email": "Email",
+      "code": "Code",
+      "password": "Password",
+      "enterEmail": "Enter your email",
+      "enterVerificationCode": "Enter verification code",
+      "setPassword": "Set your password",
+      "confirmAccount": "Confirm your account",
+      "enterRecoveryCode": "Enter recovery code",
+      "chooseNewPassword": "Choose a new password"
+    },
+    "signup": {
+      "codeSent": "We sent a 6-character code to {{email}}.",
+      "yourEmail": "your email"
+    },
+    "recovery": {
+      "codeSent": "If an account exists for {{email}}, we sent a 6-character code.",
+      "thisEmail": "this email"
+    }
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "pl": "Polish",
+    "uk": "Ukrainian",
+    "de": "German"
+  }
+}

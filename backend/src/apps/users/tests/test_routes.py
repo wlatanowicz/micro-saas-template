@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from src.apps.users.api_errors import ApiErrorCode
 from src.apps.users.auth import create_access_token, hash_password
 from src.apps.users.models import User, UserStatus
 from src.apps.users.tests.helpers import register_user
@@ -17,13 +18,13 @@ def test_signin_without_database(client: TestClient) -> None:
         json={"email": "a@b.co", "password": "password12"},
     )
     assert r.status_code == 503
-    assert "database" in r.json()["detail"].lower()
+    assert r.json()["detail"]["code"] == ApiErrorCode.database_not_configured
 
 
 def test_me_without_database(client: TestClient) -> None:
     r = client.get("/api/auth/me")
     assert r.status_code == 503
-    assert "database" in r.json()["detail"].lower()
+    assert r.json()["detail"]["code"] == ApiErrorCode.database_not_configured
 
 
 def test_auth_config_defaults(auth_client: TestClient) -> None:
@@ -51,7 +52,7 @@ def test_register_send_code_password_disabled(auth_client: TestClient, monkeypat
     monkeypatch.setattr("src.apps.users.config.AUTH_PASSWORD_ENABLED", False)
     r = auth_client.post("/api/auth/register/send-code", json={"email": "a@b.co"})
     assert r.status_code == 403
-    assert "disabled" in r.json()["detail"].lower()
+    assert r.json()["detail"]["code"] == ApiErrorCode.auth_method_disabled
 
 
 def test_signin_password_disabled(auth_client: TestClient, monkeypatch) -> None:
@@ -61,7 +62,7 @@ def test_signin_password_disabled(auth_client: TestClient, monkeypatch) -> None:
         json={"email": "a@b.co", "password": "password12"},
     )
     assert r.status_code == 403
-    assert "disabled" in r.json()["detail"].lower()
+    assert r.json()["detail"]["code"] == ApiErrorCode.auth_method_disabled
 
 
 def test_signin_success(auth_client: TestClient) -> None:
@@ -91,7 +92,7 @@ def test_signin_invalid_credentials(
     register_user(auth_client, "login@example.com", "password12")
     r = auth_client.post("/api/auth/signin", json={"email": email, "password": password})
     assert r.status_code == 401
-    assert r.json()["detail"] == "Invalid email or password"
+    assert r.json()["detail"]["code"] == ApiErrorCode.auth_invalid_credentials
 
 
 def test_signin_inactive_forbidden(auth_client: TestClient) -> None:
@@ -108,7 +109,7 @@ def test_signin_inactive_forbidden(auth_client: TestClient) -> None:
         json={"email": "inactive@example.com", "password": "password12"},
     )
     assert r.status_code == 403
-    assert r.json()["detail"] == "Account is not active"
+    assert r.json()["detail"]["code"] == ApiErrorCode.account_not_active
 
 
 def test_me_success(auth_client: TestClient) -> None:
@@ -123,26 +124,26 @@ def test_me_success(auth_client: TestClient) -> None:
 def test_me_missing_credentials(auth_client: TestClient) -> None:
     r = auth_client.get("/api/auth/me")
     assert r.status_code == 401
-    assert r.json()["detail"] == "Not authenticated"
+    assert r.json()["detail"]["code"] == ApiErrorCode.not_authenticated
 
 
 def test_me_non_bearer_scheme(auth_client: TestClient) -> None:
     r = auth_client.get("/api/auth/me", headers={"Authorization": "Basic abc"})
     assert r.status_code == 401
-    assert r.json()["detail"] == "Not authenticated"
+    assert r.json()["detail"]["code"] == ApiErrorCode.not_authenticated
 
 
 def test_me_invalid_token(auth_client: TestClient) -> None:
     r = auth_client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
     assert r.status_code == 401
-    assert r.json()["detail"] == "Invalid or expired token"
+    assert r.json()["detail"]["code"] == ApiErrorCode.invalid_or_expired_token
 
 
 def test_me_unknown_subject_claim(auth_client: TestClient) -> None:
     token = create_access_token(uuid4())
     r = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 401
-    assert r.json()["detail"] == "User not found"
+    assert r.json()["detail"]["code"] == ApiErrorCode.user_not_found
 
 
 def test_me_inactive_forbidden(auth_client: TestClient) -> None:
@@ -158,4 +159,4 @@ def test_me_inactive_forbidden(auth_client: TestClient) -> None:
     token = create_access_token(user_id)
     r = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
-    assert r.json()["detail"] == "Account is not active"
+    assert r.json()["detail"]["code"] == ApiErrorCode.account_not_active

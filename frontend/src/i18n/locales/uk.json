@@ -1,0 +1,95 @@
+{
+  "app": {
+    "title": "Шаблон Micro-SaaS",
+    "subtitle": "React фронтенд, що працює з FastAPI Lambda API.",
+    "notSignedIn": "Не ввійшли",
+    "signOut": "Вийти"
+  },
+  "api": {
+    "title": "API",
+    "status": "Статус:",
+    "databaseConfigured": "База даних налаштована:"
+  },
+  "items": {
+    "title": "Елементи",
+    "empty": "Ще немає елементів."
+  },
+  "errors": {
+    "configuration": "Помилка конфігурації",
+    "requestFailed": "Запит не виконано",
+    "apiBaseNotSet": "VITE_API_BASE_URL не налаштовано. Налаштуйте для локальної розробки або розгортання.",
+    "healthCheckFailed": "Перевірка стану не виконана: {{status}}",
+    "itemsRequestFailed": "Запит елементів не виконано: {{status}}",
+    "api": {
+      "database_not_configured": "База даних не налаштована.",
+      "auth_not_configured": "Автентифікація не налаштована.",
+      "auth_invalid_credentials": "Невірний email або пароль.",
+      "account_not_active": "Цей акаунт не активний.",
+      "not_authenticated": "Ви не ввійшли.",
+      "invalid_or_expired_token": "Сесія завершилася. Увійдіть знову.",
+      "invalid_token": "Невірний токен сесії.",
+      "user_not_found": "Користувача не знайдено.",
+      "auth_method_disabled": "Автентифікація {{method}} вимкнена.",
+      "oauth_provider_not_configured": "Вхід через {{provider}} не налаштовано.",
+      "verification_code_expired": "Код верифікації прострочено.",
+      "invalid_verification_code": "Невірний код верифікації.",
+      "email_already_registered": "Цей email уже зареєстровано.",
+      "passwords_do_not_match": "Паролі не збігаються.",
+      "auth_password_too_short": "Пароль має містити щонайменше {{min_length}} символів.",
+      "verification_code_not_verified": "Спочатку підтвердьте код.",
+      "invalid_oauth_state": "Вхід не виконано. Спробуйте ще раз.",
+      "identity_references_missing_user": "Вхід не виконано. Зверніться до підтримки.",
+      "oauth_authorization_failed": "Вхід через провайдера не виконано. Спробуйте ще раз.",
+      "oauth_profile_missing": "Вхід не виконано. Немає інформації профілю.",
+      "oauth_email_not_available": "Вхід не виконано. Email недоступний від провайдера.",
+      "request_validation_error": "Перевірте введені дані та спробуйте ще раз."
+    }
+  },
+  "auth": {
+    "signIn": "Увійти",
+    "createAccount": "Создати акаунт",
+    "resetPassword": "Скинути пароль",
+    "continueWithGoogle": "Продовжити з Google",
+    "continueWithFacebook": "Продовжити з Facebook",
+    "or": "або",
+    "email": "Email",
+    "password": "Пароль",
+    "forgotPassword": "Забули пароль?",
+    "sendCode": "Відправити код",
+    "backToSignIn": "Назад до входу",
+    "verifyCode": "Підтвердити код",
+    "resendCode": "Відправити код ще раз",
+    "confirmPassword": "Підтвердити пароль",
+    "newPassword": "Новий пароль",
+    "confirmNewPassword": "Підтвердити новий пароль",
+    "sendRecoveryCode": "Відправити код відновлення",
+    "verificationCode": "Код верифікації",
+    "recoveryCode": "Код відновлення",
+    "steps": {
+      "email": "Email",
+      "code": "Код",
+      "password": "Пароль",
+      "enterEmail": "Введіть email",
+      "enterVerificationCode": "Введіть код верифікації",
+      "setPassword": "Установіть пароль",
+      "confirmAccount": "Підтвердьте акаунт",
+      "enterRecoveryCode": "Введіть код відновлення",
+      "chooseNewPassword": "Виберіть новий пароль"
+    },
+    "signup": {
+      "codeSent": "Ми відправили 6-символьний код на {{email}}.",
+      "yourEmail": "ваш email"
+    },
+    "recovery": {
+      "codeSent": "Якщо акаунт існує для {{email}}, ми відправили 6-символьний код.",
+      "thisEmail": "цей email"
+    }
+  },
+  "language": {
+    "label": "Мова",
+    "en": "Англійська",
+    "pl": "Польська",
+    "uk": "Українська",
+    "de": "Німецька"
+  }
+}

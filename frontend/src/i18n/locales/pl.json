@@ -1,0 +1,95 @@
+{
+  "app": {
+    "title": "Szablon Micro-SaaS",
+    "subtitle": "Frontend React komunikujący się z API FastAPI Lambda.",
+    "notSignedIn": "Nie zalogowany",
+    "signOut": "Wyloguj"
+  },
+  "api": {
+    "title": "API",
+    "status": "Status:",
+    "databaseConfigured": "Baza danych skonfigurowana:"
+  },
+  "items": {
+    "title": "Elementy",
+    "empty": "Brak elementów."
+  },
+  "errors": {
+    "configuration": "Błąd konfiguracji",
+    "requestFailed": "Żądanie nie powiodło się",
+    "apiBaseNotSet": "VITE_API_BASE_URL nie jest ustawiony. Skonfiguruj go do lokalnego rozwoju lub wdrożenia.",
+    "healthCheckFailed": "Sprawdzenie stanu nie powiodło się: {{status}}",
+    "itemsRequestFailed": "Żądanie elementów nie powiodło się: {{status}}",
+    "api": {
+      "database_not_configured": "Baza danych nie jest skonfigurowana.",
+      "auth_not_configured": "Uwierzytelnianie nie jest skonfigurowane.",
+      "auth_invalid_credentials": "Nieprawidłowy email lub hasło.",
+      "account_not_active": "To konto nie jest aktywne.",
+      "not_authenticated": "Nie jesteś zalogowany.",
+      "invalid_or_expired_token": "Sesja wygasła. Zaloguj się ponownie.",
+      "invalid_token": "Nieprawidłowy token sesji.",
+      "user_not_found": "Nie znaleziono użytkownika.",
+      "auth_method_disabled": "Uwierzytelnianie {{method}} jest wyłączone.",
+      "oauth_provider_not_configured": "Logowanie przez {{provider}} nie jest skonfigurowane.",
+      "verification_code_expired": "Kod weryfikacyjny wygasł.",
+      "invalid_verification_code": "Nieprawidłowy kod weryfikacyjny.",
+      "email_already_registered": "Ten email jest już zarejestrowany.",
+      "passwords_do_not_match": "Hasła nie są identyczne.",
+      "auth_password_too_short": "Hasło musi mieć co najmniej {{min_length}} znaków.",
+      "verification_code_not_verified": "Najpierw zweryfikuj kod.",
+      "invalid_oauth_state": "Logowanie nie powiodło się. Spróbuj ponownie.",
+      "identity_references_missing_user": "Logowanie nie powiodło się. Skontaktuj się z pomocą techniczną.",
+      "oauth_authorization_failed": "Logowanie przez dostawca nie powiodło się. Spróbuj ponownie.",
+      "oauth_profile_missing": "Logowanie nie powiodło się. Brak informacji profilu.",
+      "oauth_email_not_available": "Logowanie nie powiodło się. Email nie jest dostępny od dostawcy.",
+      "request_validation_error": "Sprawdź dane wejściowe i spróbuj ponownie."
+    }
+  },
+  "auth": {
+    "signIn": "Zaloguj się",
+    "createAccount": "Utwórz konto",
+    "resetPassword": "Resetuj hasło",
+    "continueWithGoogle": "Kontynuuj z Google",
+    "continueWithFacebook": "Kontynuuj z Facebookiem",
+    "or": "lub",
+    "email": "Email",
+    "password": "Hasło",
+    "forgotPassword": "Zapomniałeś hasła?",
+    "sendCode": "Wyślij kod",
+    "backToSignIn": "Wróć do logowania",
+    "verifyCode": "Zweryfikuj kod",
+    "resendCode": "Wyślij kod ponownie",
+    "confirmPassword": "Potwierdź hasło",
+    "newPassword": "Nowe hasło",
+    "confirmNewPassword": "Potwierdź nowe hasło",
+    "sendRecoveryCode": "Wyślij kod odzyskiwania",
+    "verificationCode": "Kod weryfikacyjny",
+    "recoveryCode": "Kod odzyskiwania",
+    "steps": {
+      "email": "Email",
+      "code": "Kod",
+      "password": "Hasło",
+      "enterEmail": "Podaj swój email",
+      "enterVerificationCode": "Wpisz kod weryfikacyjny",
+      "setPassword": "Ustaw hasło",
+      "confirmAccount": "Potwierdź konto",
+      "enterRecoveryCode": "Wpisz kod odzyskiwania",
+      "chooseNewPassword": "Wybierz nowe hasło"
+    },
+    "signup": {
+      "codeSent": "Wysłaliśmy 6-znakowy kod na {{email}}.",
+      "yourEmail": "twój email"
+    },
+    "recovery": {
+      "codeSent": "Jeśli konto istnieje dla {{email}}, wysłaliśmy 6-znakowy kod.",
+      "thisEmail": "ten email"
+    }
+  },
+  "language": {
+    "label": "Język",
+    "en": "Angielski",
+    "pl": "Polski",
+    "uk": "Ukraiński",
+    "de": "Niemiecki"
+  }
+}

@@ -6,10 +6,11 @@ from uuid import UUID
 
 import bcrypt
 import jwt
-from fastapi import HTTPException
 
 from src.apps.users import config
+from src.apps.users.api_errors import ApiErrorCode
 from src.config import DATABASE_URL
+from src.utils.api_errors import raise_api_error
 
 JWT_ALGORITHM = "HS256"
 MIN_PASSWORD_LENGTH = 8
@@ -65,7 +66,8 @@ def ensure_auth_configured() -> None:
     """If the API has a database, signing tokens requires JWT_SECRET."""
     if not DATABASE_URL or config.JWT_SECRET:
         return
-    raise HTTPException(
+    raise_api_error(
+        ApiErrorCode.auth_not_configured,
+        "auth not configured (set JWT_SECRET)",
         status_code=503,
-        detail="auth not configured (set JWT_SECRET)",
     )

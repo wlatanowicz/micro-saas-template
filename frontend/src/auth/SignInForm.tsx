@@ -1,6 +1,8 @@
 import { Anchor, Button, Group, PasswordInput, Stack, TextInput } from "@mantine/core";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { translateApiError } from "../i18n/translateApiError";
 import { signInRequest } from "./api";
 import type { AuthConfig, MeUser } from "./types";
 
@@ -23,6 +25,7 @@ export function SignInForm({
   onCreateAccount,
   onForgotPassword,
 }: SignInFormProps) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -32,12 +35,12 @@ export function SignInForm({
     try {
       const result = await signInRequest(email, password);
       if (!result.ok) {
-        onError(result.error);
+        onError(translateApiError(t, result.errorCode, result.errorParams));
         return;
       }
       onSuccess(result.data.user, result.data.access_token);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Request failed");
+      onError(e instanceof Error ? e.message : t("errors.requestFailed"));
     } finally {
       onBusyChange(false);
     }
@@ -46,7 +49,7 @@ export function SignInForm({
   return (
     <Stack gap="sm">
       <TextInput
-        label="Email"
+        label={t("auth.email")}
         type="email"
         name="email"
         autoComplete="email"
@@ -58,7 +61,7 @@ export function SignInForm({
         disabled={busy}
       />
       <PasswordInput
-        label="Password"
+        label={t("auth.password")}
         name="password"
         autoComplete="current-password"
         value={password}
@@ -70,16 +73,16 @@ export function SignInForm({
       />
       <Group gap="sm">
         <Button type="button" onClick={() => void handleSignIn()} loading={busy}>
-          Sign in
+          {t("auth.signIn")}
         </Button>
       </Group>
       <Group gap="md">
         <Anchor component="button" type="button" size="sm" onClick={onCreateAccount}>
-          Create account
+          {t("auth.createAccount")}
         </Anchor>
         {authConfig.password ? (
           <Anchor component="button" type="button" size="sm" onClick={onForgotPassword}>
-            Forgot password?
+            {t("auth.forgotPassword")}
           </Anchor>
         ) : null}
       </Group>

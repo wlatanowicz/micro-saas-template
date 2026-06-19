@@ -2,26 +2,23 @@ import type { AuthConfig, MessageResponse, TokenResponse } from "./types";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
+export type ApiErrorResolution = {
+  code: string;
+  params?: Record<string, string | number>;
+};
+
 export function apiBase(): string {
   return (apiBaseUrl || "").replace(/\/$/, "");
 }
 
-export function formatApiError(body: { detail?: unknown }): string {
+export function resolveApiError(body: { detail?: unknown }): ApiErrorResolution | null {
   const d = body.detail;
-  if (typeof d === "string") {
-    return d;
+  if (typeof d === "object" && d !== null && "code" in d) {
+    const code = String((d as { code: string }).code);
+    const params = (d as { params?: Record<string, string | number> }).params;
+    return params ? { code, params } : { code };
   }
-  if (Array.isArray(d)) {
-    return d
-      .map((err) => {
-        if (err && typeof err === "object" && "msg" in err) {
-          return String((err as { msg: string }).msg);
-        }
-        return String(err);
-      })
-      .join("; ");
-  }
-  return "Request failed";
+  return null;
 }
 
 async function parseJson<T>(r: Response): Promise<T | { detail?: unknown }> {
@@ -40,10 +37,25 @@ export async function fetchAuthConfig(): Promise<AuthConfig | null> {
   return (await r.json()) as AuthConfig;
 }
 
+type ApiFailure = { ok: false; errorCode: string; errorParams?: Record<string, string | number> };
+type ApiSuccess<T> = { ok: true; data: T };
+
+function failureFromBody(body: { detail?: unknown }): ApiFailure {
+  const resolved = resolveApiError(body);
+  if (resolved) {
+    return {
+      ok: false,
+      errorCode: resolved.code,
+      errorParams: resolved.params,
+    };
+  }
+  return { ok: false, errorCode: "request_validation_error" };
+}
+
 export async function signInRequest(
   email: string,
   password: string,
-): Promise<{ ok: true; data: TokenResponse } | { ok: false; error: string }> {
+): Promise<ApiSuccess<TokenResponse> | ApiFailure> {
   const base = apiBase();
   const r = await fetch(`${base}/api/auth/signin`, {
     method: "POST",
@@ -52,14 +64,14 @@ export async function signInRequest(
   });
   const body = await parseJson<TokenResponse>(r);
   if (!r.ok) {
-    return { ok: false, error: formatApiError(body as { detail?: unknown }) };
+    return failureFromBody(body as { detail?: unknown });
   }
   return { ok: true, data: body as TokenResponse };
 }
 
 export async function registerSendCode(
   email: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | ApiFailure> {
   const base = apiBase();
   const r = await fetch(`${base}/api/auth/register/send-code`, {
     method: "POST",
@@ -68,7 +80,7 @@ export async function registerSendCode(
   });
   const body = await parseJson<MessageResponse>(r);
   if (!r.ok) {
-    return { ok: false, error: formatApiError(body as { detail?: unknown }) };
+    return failureFromBody(body as { detail?: unknown });
   }
   return { ok: true };
 }
@@ -76,7 +88,7 @@ export async function registerSendCode(
 export async function registerVerifyCode(
   email: string,
   code: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | ApiFailure> {
   const base = apiBase();
   const r = await fetch(`${base}/api/auth/register/verify-code`, {
     method: "POST",
@@ -85,7 +97,7 @@ export async function registerVerifyCode(
   });
   const body = await parseJson<MessageResponse>(r);
   if (!r.ok) {
-    return { ok: false, error: formatApiError(body as { detail?: unknown }) };
+    return failureFromBody(body as { detail?: unknown });
   }
   return { ok: true };
 }
@@ -95,7 +107,7 @@ export async function registerComplete(
   code: string,
   password: string,
   passwordConfirm: string,
-): Promise<{ ok: true; data: TokenResponse } | { ok: false; error: string }> {
+): Promise<ApiSuccess<TokenResponse> | ApiFailure> {
   const base = apiBase();
   const r = await fetch(`${base}/api/auth/register/complete`, {
     method: "POST",
@@ -109,14 +121,14 @@ export async function registerComplete(
   });
   const body = await parseJson<TokenResponse>(r);
   if (!r.ok) {
-    return { ok: false, error: formatApiError(body as { detail?: unknown }) };
+    return failureFromBody(body as { detail?: unknown });
   }
   return { ok: true, data: body as TokenResponse };
 }
 
 export async function recoverySendCode(
   email: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | ApiFailure> {
   const base = apiBase();
   const r = await fetch(`${base}/api/auth/password-recovery/send-code`, {
     method: "POST",
@@ -125,7 +137,7 @@ export async function recoverySendCode(
   });
   const body = await parseJson<MessageResponse>(r);
   if (!r.ok) {
-    return { ok: false, error: formatApiError(body as { detail?: unknown }) };
+    return failureFromBody(body as { detail?: unknown });
   }
   return { ok: true };
 }
@@ -133,7 +145,7 @@ export async function recoverySendCode(
 export async function recoveryVerifyCode(
   email: string,
   code: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | ApiFailure> {
   const base = apiBase();
   const r = await fetch(`${base}/api/auth/password-recovery/verify-code`, {
     method: "POST",
@@ -142,7 +154,7 @@ export async function recoveryVerifyCode(
   });
   const body = await parseJson<MessageResponse>(r);
   if (!r.ok) {
-    return { ok: false, error: formatApiError(body as { detail?: unknown }) };
+    return failureFromBody(body as { detail?: unknown });
   }
   return { ok: true };
 }
@@ -152,7 +164,7 @@ export async function recoveryComplete(
   code: string,
   password: string,
   passwordConfirm: string,
-): Promise<{ ok: true; data: TokenResponse } | { ok: false; error: string }> {
+): Promise<ApiSuccess<TokenResponse> | ApiFailure> {
   const base = apiBase();
   const r = await fetch(`${base}/api/auth/password-recovery/complete`, {
     method: "POST",
@@ -166,7 +178,7 @@ export async function recoveryComplete(
   });
   const body = await parseJson<TokenResponse>(r);
   if (!r.ok) {
-    return { ok: false, error: formatApiError(body as { detail?: unknown }) };
+    return failureFromBody(body as { detail?: unknown });
   }
   return { ok: true, data: body as TokenResponse };
 }
@@ -178,17 +190,17 @@ export async function loadMe(token: string): Promise<Response> {
   });
 }
 
-export function parseOAuthHash(): { accessToken?: string; authError?: string } {
+export function parseOAuthHash(): { accessToken?: string; authErrorCode?: string } {
   const hash = window.location.hash.replace(/^#/, "");
   if (!hash) {
     return {};
   }
   const params = new URLSearchParams(hash);
   const accessToken = params.get("access_token") ?? undefined;
-  const authError = params.get("auth_error") ?? undefined;
-  if (accessToken || authError) {
+  const authErrorCode = params.get("auth_error_code") ?? undefined;
+  if (accessToken || authErrorCode) {
     const path = window.location.pathname + window.location.search;
     window.history.replaceState(null, "", path);
   }
-  return { accessToken, authError };
+  return { accessToken, authErrorCode };
 }

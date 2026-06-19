@@ -10,23 +10,29 @@ import {
   Title,
 } from "@mantine/core";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { AuthPanel } from "./auth/AuthPanel";
 import { apiBase, fetchAuthConfig, loadMe, parseOAuthHash } from "./auth/api";
 import type { AuthConfig, MeUser } from "./auth/types";
+import { LanguageSelector } from "./i18n/LanguageSelector";
+import { translateApiError } from "./i18n/translateApiError";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const ACCESS_TOKEN_KEY = "access_token";
 
 type Health = { status: string; database_configured: boolean };
 
-type ItemsResponse =
-  | { items: { id: number; name: string }[]; detail?: string }
-  | null;
+type ItemsResponse = {
+  items: { id: number; name: string }[];
+  detail?: string;
+  detail_code?: string;
+};
 
 export function App() {
+  const { t } = useTranslation();
   const [health, setHealth] = useState<Health | null>(null);
-  const [items, setItems] = useState<ItemsResponse>(null);
+  const [items, setItems] = useState<ItemsResponse | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<MeUser | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -61,7 +67,7 @@ export function App() {
 
   useEffect(() => {
     if (!apiBaseUrl) {
-      setConfigError("VITE_API_BASE_URL is not set. Configure it for local dev or deploy.");
+      setConfigError(t("errors.apiBaseNotSet"));
       return;
     }
 
@@ -70,13 +76,13 @@ export function App() {
     void (async () => {
       try {
         const oauthResult = parseOAuthHash();
-        if (oauthResult.authError) {
-          setAuthError(decodeURIComponent(oauthResult.authError));
+        if (oauthResult.authErrorCode) {
+          setAuthError(translateApiError(t, oauthResult.authErrorCode));
         }
 
         const h = await fetch(`${base}/health`);
         if (!h.ok) {
-          throw new Error(`Health check failed: ${h.status}`);
+          throw new Error(t("errors.healthCheckFailed", { status: h.status }));
         }
         setHealth((await h.json()) as Health);
 
@@ -87,22 +93,22 @@ export function App() {
 
         const i = await fetch(`${base}/api/items`);
         if (!i.ok) {
-          throw new Error(`Items request failed: ${i.status}`);
+          throw new Error(t("errors.itemsRequestFailed", { status: i.status }));
         }
         setItems((await i.json()) as ItemsResponse);
 
-        const t = oauthResult.accessToken ?? getStoredToken();
-        if (t) {
+        const tkn = oauthResult.accessToken ?? getStoredToken();
+        if (tkn) {
           if (oauthResult.accessToken) {
-            localStorage.setItem(ACCESS_TOKEN_KEY, t);
+            localStorage.setItem(ACCESS_TOKEN_KEY, tkn);
           }
-          await restoreSession(t);
+          await restoreSession(tkn);
         }
       } catch (e) {
-        setConfigError(e instanceof Error ? e.message : "Request failed");
+        setConfigError(e instanceof Error ? e.message : t("errors.requestFailed"));
       }
     })();
-  }, [getStoredToken, restoreSession]);
+  }, [getStoredToken, restoreSession, t]);
 
   const methods: AuthConfig = authConfig ?? {
     password: true,
@@ -110,11 +116,16 @@ export function App() {
     facebook: false,
   };
 
+  const itemsDetailMessage = items?.detail_code
+    ? translateApiError(t, items.detail_code)
+    : null;
+
   return (
     <Container size="sm" py="xl">
       <Group justify="space-between" align="flex-start" mb="md" wrap="wrap">
-        <Title order={1}>Micro-SaaS template</Title>
+        <Title order={1}>{t("app.title")}</Title>
         <Group gap="xs" aria-live="polite">
+          <LanguageSelector />
           {currentUser ? (
             <>
               <Text fw={600}>{currentUser.email}</Text>
@@ -125,23 +136,23 @@ export function App() {
                 onClick={clearSession}
                 disabled={false}
               >
-                Sign out
+                {t("app.signOut")}
               </Button>
             </>
           ) : (
             <Text c="dimmed" size="sm">
-              Not signed in
+              {t("app.notSignedIn")}
             </Text>
           )}
         </Group>
       </Group>
 
       <Text c="dimmed" mb="lg">
-        React frontend talking to the FastAPI Lambda API.
+        {t("app.subtitle")}
       </Text>
 
       {configError ? (
-        <Alert color="red" title="Configuration error" mb="md">
+        <Alert color="red" title={t("errors.configuration")} mb="md">
           {configError}
         </Alert>
       ) : null}
@@ -160,12 +171,12 @@ export function App() {
       {!configError && health ? (
         <Paper withBorder p="md" radius="md" mb="md">
           <Title order={3} size="h4" mb="sm">
-            API
+            {t("api.title")}
           </Title>
           <Text>
-            Status: {health.status}
+            {t("api.status")} {health.status}
             <br />
-            Database configured: {String(health.database_configured)}
+            {t("api.databaseConfigured")} {String(health.database_configured)}
           </Text>
         </Paper>
       ) : null}
@@ -173,11 +184,11 @@ export function App() {
       {!configError && items ? (
         <Paper withBorder p="md" radius="md">
           <Title order={3} size="h4" mb="sm">
-            Items
+            {t("items.title")}
           </Title>
-          {items.detail ? <Text mb="sm">{items.detail}</Text> : null}
+          {itemsDetailMessage ? <Text mb="sm">{itemsDetailMessage}</Text> : null}
           {items.items.length === 0 ? (
-            <Text c="dimmed">No items yet.</Text>
+            <Text c="dimmed">{t("items.empty")}</Text>
           ) : (
             <List>
               {items.items.map((it) => (

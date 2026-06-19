@@ -1,6 +1,8 @@
 import { Button, Group, PasswordInput, Stack, Stepper, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { translateApiError } from "../i18n/translateApiError";
 import { recoveryComplete, recoverySendCode, recoveryVerifyCode } from "./api";
 import { SixCharCodeInput } from "./SixCharCodeInput";
 import type { MeUser } from "./types";
@@ -20,6 +22,7 @@ export function PasswordRecoveryWizard({
   onSuccess,
   onBackToSignIn,
 }: PasswordRecoveryWizardProps) {
+  const { t } = useTranslation();
   const [active, setActive] = useState(0);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -32,12 +35,12 @@ export function PasswordRecoveryWizard({
     try {
       const result = await recoverySendCode(email);
       if (!result.ok) {
-        onError(result.error);
+        onError(translateApiError(t, result.errorCode, result.errorParams));
         return false;
       }
       return true;
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Request failed");
+      onError(e instanceof Error ? e.message : t("errors.requestFailed"));
       return false;
     } finally {
       onBusyChange(false);
@@ -61,12 +64,12 @@ export function PasswordRecoveryWizard({
     try {
       const result = await recoveryVerifyCode(email, code);
       if (!result.ok) {
-        onError(result.error);
+        onError(translateApiError(t, result.errorCode, result.errorParams));
         return;
       }
       setActive(2);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Request failed");
+      onError(e instanceof Error ? e.message : t("errors.requestFailed"));
     } finally {
       onBusyChange(false);
     }
@@ -74,7 +77,7 @@ export function PasswordRecoveryWizard({
 
   const handleComplete = async () => {
     if (password !== passwordConfirm) {
-      onError("Passwords do not match");
+      onError(translateApiError(t, "passwords_do_not_match"));
       return;
     }
     onError(null);
@@ -82,12 +85,12 @@ export function PasswordRecoveryWizard({
     try {
       const result = await recoveryComplete(email, code, password, passwordConfirm);
       if (!result.ok) {
-        onError(result.error);
+        onError(translateApiError(t, result.errorCode, result.errorParams));
         return;
       }
       onSuccess(result.data.user, result.data.access_token);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Request failed");
+      onError(e instanceof Error ? e.message : t("errors.requestFailed"));
     } finally {
       onBusyChange(false);
     }
@@ -96,10 +99,13 @@ export function PasswordRecoveryWizard({
   return (
     <Stack gap="md">
       <Stepper active={active} onStepClick={setActive} allowNextStepsSelect={false}>
-        <Stepper.Step label="Email" description="Confirm your account">
+        <Stepper.Step
+          label={t("auth.steps.email")}
+          description={t("auth.steps.confirmAccount")}
+        >
           <Stack gap="sm" mt="md">
             <TextInput
-              label="Email"
+              label={t("auth.email")}
               type="email"
               autoComplete="email"
               value={email}
@@ -111,28 +117,33 @@ export function PasswordRecoveryWizard({
             />
             <Group gap="sm">
               <Button type="button" onClick={() => void handleEmailNext()} loading={busy}>
-                Send recovery code
+                {t("auth.sendRecoveryCode")}
               </Button>
               <Button type="button" variant="subtle" onClick={onBackToSignIn} disabled={busy}>
-                Back to sign in
+                {t("auth.backToSignIn")}
               </Button>
             </Group>
           </Stack>
         </Stepper.Step>
-        <Stepper.Step label="Code" description="Enter recovery code">
+        <Stepper.Step
+          label={t("auth.steps.code")}
+          description={t("auth.steps.enterRecoveryCode")}
+        >
           <Stack gap="sm" mt="md">
             <Text size="sm" c="dimmed">
-              If an account exists for {email || "this email"}, we sent a 6-character code.
+              {t("auth.recovery.codeSent", {
+                email: email || t("auth.recovery.thisEmail"),
+              })}
             </Text>
             <SixCharCodeInput
-              label="Recovery code"
+              label={t("auth.recoveryCode")}
               value={code}
               onChange={setCode}
               disabled={busy}
             />
             <Group gap="sm">
               <Button type="button" onClick={() => void handleVerifyNext()} loading={busy}>
-                Verify code
+                {t("auth.verifyCode")}
               </Button>
               <Button
                 type="button"
@@ -140,15 +151,18 @@ export function PasswordRecoveryWizard({
                 onClick={() => void handleResendCode()}
                 loading={busy}
               >
-                Resend code
+                {t("auth.resendCode")}
               </Button>
             </Group>
           </Stack>
         </Stepper.Step>
-        <Stepper.Step label="Password" description="Choose a new password">
+        <Stepper.Step
+          label={t("auth.steps.password")}
+          description={t("auth.steps.chooseNewPassword")}
+        >
           <Stack gap="sm" mt="md">
             <PasswordInput
-              label="New password"
+              label={t("auth.newPassword")}
               autoComplete="new-password"
               value={password}
               onChange={(e) => {
@@ -158,7 +172,7 @@ export function PasswordRecoveryWizard({
               disabled={busy}
             />
             <PasswordInput
-              label="Confirm new password"
+              label={t("auth.confirmNewPassword")}
               autoComplete="new-password"
               value={passwordConfirm}
               onChange={(e) => {
@@ -168,7 +182,7 @@ export function PasswordRecoveryWizard({
               disabled={busy}
             />
             <Button type="button" onClick={() => void handleComplete()} loading={busy}>
-              Reset password
+              {t("auth.resetPassword")}
             </Button>
           </Stack>
         </Stepper.Step>

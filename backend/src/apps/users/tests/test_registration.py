@@ -6,8 +6,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import select
 
+from src.apps.users.api_errors import ApiErrorCode
 from src.apps.users.models import VerificationCode, VerificationPurpose
 from src.apps.users.tests.helpers import _latest_code, register_user
+from src.utils.api_errors import CommonApiErrorCode
 from src.utils.db import session_scope
 
 
@@ -70,7 +72,7 @@ def test_registration_duplicate_email_on_send_code(auth_client: TestClient) -> N
     register_user(auth_client, "dup@example.com", "password12")
     r = auth_client.post("/api/auth/register/send-code", json={"email": "dup@example.com"})
     assert r.status_code == 409
-    assert r.json()["detail"] == "email already registered"
+    assert r.json()["detail"]["code"] == ApiErrorCode.email_already_registered
 
 
 def test_registration_invalid_code(auth_client: TestClient) -> None:
@@ -86,7 +88,7 @@ def test_registration_invalid_code(auth_client: TestClient) -> None:
         json={"email": "bad@example.com", "code": "ZZZZZZ"},
     )
     assert r.status_code == 400
-    assert r.json()["detail"] == "Invalid verification code"
+    assert r.json()["detail"]["code"] == ApiErrorCode.invalid_verification_code
 
 
 def test_registration_complete_without_verify(auth_client: TestClient) -> None:
@@ -108,7 +110,7 @@ def test_registration_complete_without_verify(auth_client: TestClient) -> None:
         },
     )
     assert r.status_code == 400
-    assert r.json()["detail"] == "Verification code has not been verified"
+    assert r.json()["detail"]["code"] == ApiErrorCode.verification_code_not_verified
 
 
 def test_registration_password_mismatch(auth_client: TestClient) -> None:
@@ -137,7 +139,7 @@ def test_registration_password_mismatch(auth_client: TestClient) -> None:
         },
     )
     assert r.status_code == 400
-    assert r.json()["detail"] == "Passwords do not match"
+    assert r.json()["detail"]["code"] == ApiErrorCode.passwords_do_not_match
 
 
 def test_registration_expired_code(auth_client: TestClient, monkeypatch) -> None:
@@ -161,7 +163,7 @@ def test_registration_expired_code(auth_client: TestClient, monkeypatch) -> None
         json={"email": "expired@example.com", "code": code},
     )
     assert r.status_code == 400
-    assert r.json()["detail"] == "Verification code has expired"
+    assert r.json()["detail"]["code"] == ApiErrorCode.verification_code_expired
 
 
 @pytest.mark.parametrize(
@@ -183,4 +185,4 @@ def test_registration_validation_errors(
     )
     r = auth_client.post(path, json=payload)
     assert r.status_code == 422
-    assert substr in str(r.json()).lower()
+    assert r.json()["detail"]["code"] == CommonApiErrorCode.request_validation_error

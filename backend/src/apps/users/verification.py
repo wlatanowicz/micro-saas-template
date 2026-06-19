@@ -4,10 +4,10 @@ import secrets
 import string
 from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException, status
 from sqlmodel import Session, delete, select
 
 from src.apps.notifications.service import send_templated_email
+from src.apps.users.api_errors import ApiErrorCode
 from src.apps.users.auth import (
     MIN_PASSWORD_LENGTH,
     create_access_token,
@@ -15,6 +15,7 @@ from src.apps.users.auth import (
     normalize_email,
 )
 from src.apps.users.models import User, UserStatus, VerificationCode, VerificationPurpose
+from src.utils.api_errors import raise_api_error
 
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 CODE_LENGTH = 6
@@ -68,14 +69,16 @@ def _get_active_code(
 
 def _validate_code_match(record: VerificationCode, code: str) -> None:
     if record.valid_until < _now():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification code has expired",
+        raise_api_error(
+            ApiErrorCode.verification_code_expired,
+            "Verification code has expired",
+            status_code=400,
         )
     if not secrets.compare_digest(record.code, code.upper()):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid verification code",
+        raise_api_error(
+            ApiErrorCode.invalid_verification_code,
+            "Invalid verification code",
+            status_code=400,
         )
 
 
@@ -96,9 +99,10 @@ def _send_code_email(*, email: str, code: str, purpose: VerificationPurpose) -> 
 def send_registration_code(session: Session, email: str) -> None:
     existing = session.exec(select(User).where(User.email == email)).first()
     if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="email already registered",
+        raise_api_error(
+            ApiErrorCode.email_already_registered,
+            "email already registered",
+            status_code=409,
         )
     code = generate_code()
     now = _now()
@@ -123,9 +127,10 @@ def verify_registration_code(session: Session, email: str, code: str) -> None:
         purpose=VerificationPurpose.registration,
     )
     if record is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid verification code",
+        raise_api_error(
+            ApiErrorCode.invalid_verification_code,
+            "Invalid verification code",
+            status_code=400,
         )
     _validate_code_match(record, code)
     record.verified_at = _now()
@@ -142,14 +147,17 @@ def complete_registration(
     password_confirm: str,
 ) -> dict:
     if password != password_confirm:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match",
+        raise_api_error(
+            ApiErrorCode.passwords_do_not_match,
+            "Passwords do not match",
+            status_code=400,
         )
     if len(password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"password must be at least {MIN_PASSWORD_LENGTH} characters",
+        raise_api_error(
+            ApiErrorCode.auth_password_too_short,
+            f"password must be at least {MIN_PASSWORD_LENGTH} characters",
+            status_code=422,
+            params={"min_length": MIN_PASSWORD_LENGTH},
         )
     record = _get_active_code(
         session,
@@ -157,16 +165,18 @@ def complete_registration(
         purpose=VerificationPurpose.registration,
     )
     if record is None or record.verified_at is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification code has not been verified",
+        raise_api_error(
+            ApiErrorCode.verification_code_not_verified,
+            "Verification code has not been verified",
+            status_code=400,
         )
     _validate_code_match(record, code)
     existing = session.exec(select(User).where(User.email == email)).first()
     if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="email already registered",
+        raise_api_error(
+            ApiErrorCode.email_already_registered,
+            "email already registered",
+            status_code=409,
         )
     user = User(
         email=email,
@@ -221,9 +231,10 @@ def verify_password_recovery_code(session: Session, email: str, code: str) -> No
         purpose=VerificationPurpose.password_recovery,
     )
     if record is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid verification code",
+        raise_api_error(
+            ApiErrorCode.invalid_verification_code,
+            "Invalid verification code",
+            status_code=400,
         )
     _validate_code_match(record, code)
     record.verified_at = _now()
@@ -240,20 +251,24 @@ def complete_password_recovery(
     password_confirm: str,
 ) -> dict:
     if password != password_confirm:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match",
+        raise_api_error(
+            ApiErrorCode.passwords_do_not_match,
+            "Passwords do not match",
+            status_code=400,
         )
     if len(password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"password must be at least {MIN_PASSWORD_LENGTH} characters",
+        raise_api_error(
+            ApiErrorCode.auth_password_too_short,
+            f"password must be at least {MIN_PASSWORD_LENGTH} characters",
+            status_code=422,
+            params={"min_length": MIN_PASSWORD_LENGTH},
         )
     user = session.exec(select(User).where(User.email == email)).first()
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid verification code",
+        raise_api_error(
+            ApiErrorCode.invalid_verification_code,
+            "Invalid verification code",
+            status_code=400,
         )
     record = _get_active_code(
         session,
@@ -261,9 +276,10 @@ def complete_password_recovery(
         purpose=VerificationPurpose.password_recovery,
     )
     if record is None or record.verified_at is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification code has not been verified",
+        raise_api_error(
+            ApiErrorCode.verification_code_not_verified,
+            "Verification code has not been verified",
+            status_code=400,
         )
     _validate_code_match(record, code)
     user.hashed_password = hash_password(password)

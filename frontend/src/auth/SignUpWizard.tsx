@@ -1,6 +1,8 @@
 import { Button, Group, PasswordInput, Stack, Stepper, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { translateApiError } from "../i18n/translateApiError";
 import { registerComplete, registerSendCode, registerVerifyCode } from "./api";
 import { SixCharCodeInput } from "./SixCharCodeInput";
 import type { MeUser } from "./types";
@@ -20,6 +22,7 @@ export function SignUpWizard({
   onSuccess,
   onBackToSignIn,
 }: SignUpWizardProps) {
+  const { t } = useTranslation();
   const [active, setActive] = useState(0);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -32,12 +35,12 @@ export function SignUpWizard({
     try {
       const result = await registerSendCode(email);
       if (!result.ok) {
-        onError(result.error);
+        onError(translateApiError(t, result.errorCode, result.errorParams));
         return false;
       }
       return true;
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Request failed");
+      onError(e instanceof Error ? e.message : t("errors.requestFailed"));
       return false;
     } finally {
       onBusyChange(false);
@@ -61,12 +64,12 @@ export function SignUpWizard({
     try {
       const result = await registerVerifyCode(email, code);
       if (!result.ok) {
-        onError(result.error);
+        onError(translateApiError(t, result.errorCode, result.errorParams));
         return;
       }
       setActive(2);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Request failed");
+      onError(e instanceof Error ? e.message : t("errors.requestFailed"));
     } finally {
       onBusyChange(false);
     }
@@ -74,7 +77,7 @@ export function SignUpWizard({
 
   const handleComplete = async () => {
     if (password !== passwordConfirm) {
-      onError("Passwords do not match");
+      onError(translateApiError(t, "passwords_do_not_match"));
       return;
     }
     onError(null);
@@ -82,12 +85,12 @@ export function SignUpWizard({
     try {
       const result = await registerComplete(email, code, password, passwordConfirm);
       if (!result.ok) {
-        onError(result.error);
+        onError(translateApiError(t, result.errorCode, result.errorParams));
         return;
       }
       onSuccess(result.data.user, result.data.access_token);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Request failed");
+      onError(e instanceof Error ? e.message : t("errors.requestFailed"));
     } finally {
       onBusyChange(false);
     }
@@ -96,10 +99,13 @@ export function SignUpWizard({
   return (
     <Stack gap="md">
       <Stepper active={active} onStepClick={setActive} allowNextStepsSelect={false}>
-        <Stepper.Step label="Email" description="Enter your email">
+        <Stepper.Step
+          label={t("auth.steps.email")}
+          description={t("auth.steps.enterEmail")}
+        >
           <Stack gap="sm" mt="md">
             <TextInput
-              label="Email"
+              label={t("auth.email")}
               type="email"
               autoComplete="email"
               value={email}
@@ -111,28 +117,33 @@ export function SignUpWizard({
             />
             <Group gap="sm">
               <Button type="button" onClick={() => void handleEmailNext()} loading={busy}>
-                Send code
+                {t("auth.sendCode")}
               </Button>
               <Button type="button" variant="subtle" onClick={onBackToSignIn} disabled={busy}>
-                Back to sign in
+                {t("auth.backToSignIn")}
               </Button>
             </Group>
           </Stack>
         </Stepper.Step>
-        <Stepper.Step label="Code" description="Enter verification code">
+        <Stepper.Step
+          label={t("auth.steps.code")}
+          description={t("auth.steps.enterVerificationCode")}
+        >
           <Stack gap="sm" mt="md">
             <Text size="sm" c="dimmed">
-              We sent a 6-character code to {email || "your email"}.
+              {t("auth.signup.codeSent", {
+                email: email || t("auth.signup.yourEmail"),
+              })}
             </Text>
             <SixCharCodeInput
-              label="Verification code"
+              label={t("auth.verificationCode")}
               value={code}
               onChange={setCode}
               disabled={busy}
             />
             <Group gap="sm">
               <Button type="button" onClick={() => void handleVerifyNext()} loading={busy}>
-                Verify code
+                {t("auth.verifyCode")}
               </Button>
               <Button
                 type="button"
@@ -140,15 +151,18 @@ export function SignUpWizard({
                 onClick={() => void handleResendCode()}
                 loading={busy}
               >
-                Resend code
+                {t("auth.resendCode")}
               </Button>
             </Group>
           </Stack>
         </Stepper.Step>
-        <Stepper.Step label="Password" description="Set your password">
+        <Stepper.Step
+          label={t("auth.steps.password")}
+          description={t("auth.steps.setPassword")}
+        >
           <Stack gap="sm" mt="md">
             <PasswordInput
-              label="Password"
+              label={t("auth.password")}
               autoComplete="new-password"
               value={password}
               onChange={(e) => {
@@ -158,7 +172,7 @@ export function SignUpWizard({
               disabled={busy}
             />
             <PasswordInput
-              label="Confirm password"
+              label={t("auth.confirmPassword")}
               autoComplete="new-password"
               value={passwordConfirm}
               onChange={(e) => {
@@ -168,7 +182,7 @@ export function SignUpWizard({
               disabled={busy}
             />
             <Button type="button" onClick={() => void handleComplete()} loading={busy}>
-              Create account
+              {t("auth.createAccount")}
             </Button>
           </Stack>
         </Stepper.Step>

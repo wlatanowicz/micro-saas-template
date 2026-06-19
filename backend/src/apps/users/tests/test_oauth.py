@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlmodel import select
 
+from src.apps.users.api_errors import ApiErrorCode
 from src.apps.users.auth import hash_password
 from src.apps.users.models import AuthProvider, User, UserIdentity, UserStatus
 from src.apps.users.oauth import (
@@ -16,15 +18,24 @@ from src.apps.users.tests.helpers import register_user
 from src.utils.db import session_scope
 
 
-def test_create_and_verify_oauth_state() -> None:
+def test_create_and_verify_oauth_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.apps.users.config.JWT_SECRET",
+        "test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci",
+    )
     state = create_oauth_state("google")
     verify_oauth_state(state, "google")
 
 
-def test_verify_oauth_state_rejects_wrong_provider() -> None:
+def test_verify_oauth_state_rejects_wrong_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.apps.users.config.JWT_SECRET",
+        "test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci",
+    )
     state = create_oauth_state("google")
-    with pytest.raises(Exception, match="invalid oauth state"):
+    with pytest.raises(HTTPException) as exc_info:
         verify_oauth_state(state, "facebook")
+    assert exc_info.value.detail["code"] == ApiErrorCode.invalid_oauth_state
 
 
 def test_resolve_oauth_user_creates_user(postgres_integration) -> None:
@@ -129,7 +140,7 @@ def test_google_start_disabled(auth_client: TestClient, monkeypatch) -> None:
     monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_ENABLED", False)
     r = auth_client.get("/api/auth/google", follow_redirects=False)
     assert r.status_code == 403
-    assert "disabled" in r.json()["detail"].lower()
+    assert r.json()["detail"]["code"] == ApiErrorCode.auth_method_disabled
 
 
 def test_google_start_missing_credentials(auth_client: TestClient, monkeypatch) -> None:

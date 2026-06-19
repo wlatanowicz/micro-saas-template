@@ -3,12 +3,13 @@ from __future__ import annotations
 from uuid import UUID
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, field_validator
 from sqlmodel import Session, select
 
 from src.apps.users import config
+from src.apps.users.api_errors import ApiErrorCode
 from src.apps.users.auth import (
     MIN_PASSWORD_LENGTH,
     create_access_token,
@@ -32,6 +33,7 @@ from src.apps.users.verification import (
     verify_password_recovery_code,
     verify_registration_code,
 )
+from src.utils.api_errors import raise_api_error
 from src.utils.deps import get_db_session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -139,9 +141,10 @@ class MessageOut(BaseModel):
 
 def _require_session(session: Session | None) -> Session:
     if session is None:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.database_not_configured,
+            "database not configured",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="database not configured",
         )
     return session
 
@@ -243,9 +246,10 @@ def signin(
     session: Session | None = Depends(get_db_session),
 ) -> dict:
     if session is None:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.database_not_configured,
+            "database not configured",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="database not configured",
         )
     ensure_auth_configured()
     require_method_enabled("password")
@@ -255,14 +259,16 @@ def signin(
         or user.hashed_password is None
         or not verify_password(body.password, user.hashed_password)
     ):
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.auth_invalid_credentials,
+            "Invalid email or password",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
         )
     if user.status != UserStatus.active:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.account_not_active,
+            "Account is not active",
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is not active",
         )
     token = create_access_token(user.id)
     return {
@@ -282,40 +288,46 @@ def me(
     session: Session | None = Depends(get_db_session),
 ) -> UserPublic:
     if session is None:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.database_not_configured,
+            "database not configured",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="database not configured",
         )
     ensure_auth_configured()
     if creds is None or creds.scheme.lower() != "bearer":
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.not_authenticated,
+            "Not authenticated",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
         )
     try:
         payload = decode_token(creds.credentials)
     except jwt.PyJWTError:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.invalid_or_expired_token,
+            "Invalid or expired token",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        ) from None
+        )
     try:
         user_id = UUID(str(payload["sub"]))
-    except (KeyError, TypeError, ValueError) as e:
-        raise HTTPException(
+    except (KeyError, TypeError, ValueError):
+        raise_api_error(
+            ApiErrorCode.invalid_token,
+            "Invalid token",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        ) from e
+        )
     user = session.get(User, user_id)
     if user is None:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.user_not_found,
+            "User not found",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
         )
     if user.status != UserStatus.active:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.account_not_active,
+            "Account is not active",
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is not active",
         )
     return UserPublic(
         id=user.id,
@@ -338,9 +350,10 @@ async def google_callback(
     session: Session | None = Depends(get_db_session),
 ) -> object:
     if session is None:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.database_not_configured,
+            "database not configured",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="database not configured",
         )
     ensure_auth_configured()
     require_method_enabled("google")
@@ -362,9 +375,10 @@ async def facebook_callback(
     session: Session | None = Depends(get_db_session),
 ) -> object:
     if session is None:
-        raise HTTPException(
+        raise_api_error(
+            ApiErrorCode.database_not_configured,
+            "database not configured",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="database not configured",
         )
     ensure_auth_configured()
     require_method_enabled("facebook")

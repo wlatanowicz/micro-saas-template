@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from src.scheduler.executor import execute_task
+from src.scheduler.payload import TaskPayload
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -21,17 +22,11 @@ def handler(event: dict[str, Any], context: object) -> dict[str, int]:
         if not isinstance(body, str):
             msg = f"SQS record body must be a string, got {type(body).__name__}"
             raise TypeError(msg)
-        payload = json.loads(body)
-        function_path = payload["function_path"]
-        args = payload.get("args", [])
-        kwargs = payload.get("kwargs", {})
-        if not isinstance(args, list):
-            msg = f"payload args must be a list, got {type(args).__name__}"
-            raise TypeError(msg)
-        if not isinstance(kwargs, dict):
-            msg = f"payload kwargs must be a dict, got {type(kwargs).__name__}"
-            raise TypeError(msg)
-        logger.info("Running scheduled task %s", function_path)
-        execute_task(function_path, args, kwargs)
+        payload = TaskPayload.from_dict(json.loads(body))
+        if payload.is_expired():
+            logger.info("Skipping expired task %s", payload.function_path)
+        else:
+            logger.info("Running scheduled task %s", payload.function_path)
+            execute_task(payload.function_path, payload.args, payload.kwargs)
         processed += 1
     return {"processed": processed}

@@ -31,6 +31,7 @@ def test_sqs_transport_sends_json_payload(monkeypatch: pytest.MonkeyPatch) -> No
     assert payload["function_path"].endswith(".sample_task")
     assert payload["args"] == ["hello"]
     assert payload["kwargs"] == {"flag": True}
+    assert "created_at" in payload
 
 
 def test_sqs_transport_requires_queue_url(monkeypatch: pytest.MonkeyPatch) -> None:

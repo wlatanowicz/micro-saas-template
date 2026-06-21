@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from src.scheduler import config as scheduler_config
+from src.scheduler.payload import TaskPayload
 from src.scheduler.registry import RegisteredTask
 from src.scheduler.sqs import send_message as send_sqs_message
 from src.utils.env import ConfigurationError
@@ -20,12 +21,8 @@ def enqueue_task(registered: RegisteredTask, *args: Any, **kwargs: Any) -> Any:
             raise ConfigurationError(msg)
         return registered.function(*args, **kwargs)
     if transport == "sqs":
-        payload = {
-            "function_path": registered.function_path,
-            "args": list(args),
-            "kwargs": kwargs,
-        }
+        task_payload = TaskPayload.for_task(registered, *args, **kwargs)
         url = scheduler_config.queue_url(registered.queue)
-        return send_sqs_message(queue_url=url, payload=payload)
+        return send_sqs_message(queue_url=url, payload=task_payload.to_dict())
     msg = f"unsupported SCHEDULER_TRANSPORT: {transport}"
     raise ConfigurationError(msg)

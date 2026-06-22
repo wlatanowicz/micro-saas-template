@@ -142,6 +142,36 @@ def test_registration_password_mismatch(auth_client: TestClient) -> None:
     assert r.json()["detail"]["code"] == ApiErrorCode.passwords_do_not_match
 
 
+def test_registration_verification_code_cannot_be_reused(auth_client: TestClient) -> None:
+    assert (
+        auth_client.post(
+            "/api/auth/register/send-code",
+            json={"email": "reuse@example.com"},
+        ).status_code
+        == 200
+    )
+    code = _latest_code("reuse@example.com", VerificationPurpose.registration)
+    verify_payload = {"email": "reuse@example.com", "code": code}
+    assert (
+        auth_client.post("/api/auth/register/verify-code", json=verify_payload).status_code
+        == 200
+    )
+    verify_again = auth_client.post("/api/auth/register/verify-code", json=verify_payload)
+    assert verify_again.status_code == 400
+    assert verify_again.json()["detail"]["code"] == ApiErrorCode.invalid_verification_code
+
+    complete_payload = {
+        "email": "reuse@example.com",
+        "code": code,
+        "password": "password12",
+        "password_confirm": "password12",
+    }
+    assert auth_client.post("/api/auth/register/complete", json=complete_payload).status_code == 201
+    complete_again = auth_client.post("/api/auth/register/complete", json=complete_payload)
+    assert complete_again.status_code == 400
+    assert complete_again.json()["detail"]["code"] == ApiErrorCode.invalid_verification_code
+
+
 def test_registration_expired_code(auth_client: TestClient, monkeypatch) -> None:
     assert (
         auth_client.post(

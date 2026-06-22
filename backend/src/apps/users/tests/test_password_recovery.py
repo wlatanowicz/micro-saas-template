@@ -126,3 +126,46 @@ def test_password_recovery_invalid_code(auth_client: TestClient) -> None:
     )
     assert r.status_code == 400
     assert r.json()["detail"]["code"] == ApiErrorCode.invalid_verification_code
+
+
+def test_password_recovery_verification_code_cannot_be_reused(auth_client: TestClient) -> None:
+    register_user(auth_client, "reuse-recover@example.com", "password12")
+    assert (
+        auth_client.post(
+            "/api/auth/password-recovery/send-code",
+            json={"email": "reuse-recover@example.com"},
+        ).status_code
+        == 200
+    )
+    code = _latest_code("reuse-recover@example.com", VerificationPurpose.password_recovery)
+    verify_payload = {"email": "reuse-recover@example.com", "code": code}
+    assert (
+        auth_client.post(
+            "/api/auth/password-recovery/verify-code",
+            json=verify_payload,
+        ).status_code
+        == 200
+    )
+    verify_again = auth_client.post(
+        "/api/auth/password-recovery/verify-code",
+        json=verify_payload,
+    )
+    assert verify_again.status_code == 400
+    assert verify_again.json()["detail"]["code"] == ApiErrorCode.invalid_verification_code
+
+    complete_payload = {
+        "email": "reuse-recover@example.com",
+        "code": code,
+        "password": "newpassword12",
+        "password_confirm": "newpassword12",
+    }
+    assert (
+        auth_client.post("/api/auth/password-recovery/complete", json=complete_payload).status_code
+        == 200
+    )
+    complete_again = auth_client.post(
+        "/api/auth/password-recovery/complete",
+        json=complete_payload,
+    )
+    assert complete_again.status_code == 400
+    assert complete_again.json()["detail"]["code"] == ApiErrorCode.invalid_verification_code

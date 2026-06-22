@@ -4,7 +4,7 @@ import secrets
 import string
 from datetime import UTC, datetime, timedelta
 
-from sqlmodel import Session, delete, select
+from sqlmodel import Session, delete, select, update
 
 from src.apps.notifications.service import send_templated_email
 from src.apps.users.api_errors import ApiErrorCode
@@ -50,21 +50,30 @@ def _delete_pending_codes(
     )
 
 
-def _get_active_code(
+def _find_code(
     session: Session,
     *,
     email: str,
     purpose: VerificationPurpose,
+    code: str,
 ) -> VerificationCode | None:
     return session.exec(
         select(VerificationCode)
         .where(
             VerificationCode.email == email,
             VerificationCode.purpose == purpose,
-            VerificationCode.consumed_at.is_(None),
+            VerificationCode.code == code.upper(),
         )
         .order_by(VerificationCode.created_at.desc())
     ).first()
+
+
+def _raise_invalid_code() -> None:
+    raise_api_error(
+        ApiErrorCode.invalid_verification_code,
+        "Invalid verification code",
+        status_code=400,
+    )
 
 
 def _validate_code_match(record: VerificationCode, code: str) -> None:
@@ -75,11 +84,39 @@ def _validate_code_match(record: VerificationCode, code: str) -> None:
             status_code=400,
         )
     if not secrets.compare_digest(record.code, code.upper()):
-        raise_api_error(
-            ApiErrorCode.invalid_verification_code,
-            "Invalid verification code",
-            status_code=400,
+        _raise_invalid_code()
+
+
+def _mark_code_verified(session: Session, record: VerificationCode) -> None:
+    now = _now()
+    result = session.exec(
+        update(VerificationCode)
+        .where(
+            VerificationCode.id == record.id,
+            VerificationCode.consumed_at.is_(None),
+            VerificationCode.verified_at.is_(None),
         )
+        .values(verified_at=now)
+    )
+    if result.rowcount != 1:
+        _raise_invalid_code()
+    session.flush()
+
+
+def _consume_verified_code(session: Session, record: VerificationCode) -> None:
+    now = _now()
+    result = session.exec(
+        update(VerificationCode)
+        .where(
+            VerificationCode.id == record.id,
+            VerificationCode.consumed_at.is_(None),
+            VerificationCode.verified_at.is_not(None),
+        )
+        .values(consumed_at=now)
+    )
+    if result.rowcount != 1:
+        _raise_invalid_code()
+    session.flush()
 
 
 def _send_code_email(*, email: str, code: str, purpose: VerificationPurpose) -> None:
@@ -121,21 +158,16 @@ def send_registration_code(session: Session, email: str) -> None:
 
 
 def verify_registration_code(session: Session, email: str, code: str) -> None:
-    record = _get_active_code(
+    record = _find_code(
         session,
         email=email,
         purpose=VerificationPurpose.registration,
+        code=code,
     )
-    if record is None:
-        raise_api_error(
-            ApiErrorCode.invalid_verification_code,
-            "Invalid verification code",
-            status_code=400,
-        )
+    if record is None or record.consumed_at is not None or record.verified_at is not None:
+        _raise_invalid_code()
     _validate_code_match(record, code)
-    record.verified_at = _now()
-    session.add(record)
-    session.flush()
+    _mark_code_verified(session, record)
 
 
 def complete_registration(
@@ -159,12 +191,15 @@ def complete_registration(
             status_code=422,
             params={"min_length": MIN_PASSWORD_LENGTH},
         )
-    record = _get_active_code(
+    record = _find_code(
         session,
         email=email,
         purpose=VerificationPurpose.registration,
+        code=code,
     )
-    if record is None or record.verified_at is None:
+    if record is None or record.consumed_at is not None:
+        _raise_invalid_code()
+    if record.verified_at is None:
         raise_api_error(
             ApiErrorCode.verification_code_not_verified,
             "Verification code has not been verified",
@@ -178,14 +213,13 @@ def complete_registration(
             "email already registered",
             status_code=409,
         )
+    _consume_verified_code(session, record)
     user = User(
         email=email,
         hashed_password=hash_password(password),
         status=UserStatus.active,
     )
     session.add(user)
-    record.consumed_at = _now()
-    session.add(record)
     session.flush()
     session.refresh(user)
     token = create_access_token(user.id)
@@ -225,21 +259,16 @@ def send_password_recovery_code(session: Session, email: str) -> None:
 
 
 def verify_password_recovery_code(session: Session, email: str, code: str) -> None:
-    record = _get_active_code(
+    record = _find_code(
         session,
         email=email,
         purpose=VerificationPurpose.password_recovery,
+        code=code,
     )
-    if record is None:
-        raise_api_error(
-            ApiErrorCode.invalid_verification_code,
-            "Invalid verification code",
-            status_code=400,
-        )
+    if record is None or record.consumed_at is not None or record.verified_at is not None:
+        _raise_invalid_code()
     _validate_code_match(record, code)
-    record.verified_at = _now()
-    session.add(record)
-    session.flush()
+    _mark_code_verified(session, record)
 
 
 def complete_password_recovery(
@@ -270,22 +299,24 @@ def complete_password_recovery(
             "Invalid verification code",
             status_code=400,
         )
-    record = _get_active_code(
+    record = _find_code(
         session,
         email=email,
         purpose=VerificationPurpose.password_recovery,
+        code=code,
     )
-    if record is None or record.verified_at is None:
+    if record is None or record.consumed_at is not None:
+        _raise_invalid_code()
+    if record.verified_at is None:
         raise_api_error(
             ApiErrorCode.verification_code_not_verified,
             "Verification code has not been verified",
             status_code=400,
         )
     _validate_code_match(record, code)
+    _consume_verified_code(session, record)
     user.hashed_password = hash_password(password)
-    record.consumed_at = _now()
     session.add(user)
-    session.add(record)
     session.flush()
     session.refresh(user)
     token = create_access_token(user.id)

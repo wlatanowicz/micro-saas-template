@@ -30,6 +30,7 @@ def test_for_task_includes_created_at_and_expire_seconds() -> None:
     assert payload.kwargs == {"flag": True}
     assert payload.created_at == created_at
     assert payload.expire_seconds == 300.0
+    assert payload.retry == 0
 
 
 def test_for_task_omits_expire_seconds_when_not_set() -> None:
@@ -50,6 +51,7 @@ def test_to_dict_serializes_payload() -> None:
     assert data["kwargs"] == {}
     assert data["created_at"] == "2026-06-15T12:00:00+00:00"
     assert data["expire_seconds"] == 300.0
+    assert data["retry"] == 0
 
 
 def test_from_dict_round_trip() -> None:
@@ -103,3 +105,48 @@ def test_is_expired_without_expire_seconds() -> None:
 def test_from_dict_rejects_invalid_args_type() -> None:
     with pytest.raises(TypeError, match="payload args must be a list"):
         TaskPayload.from_dict({"function_path": "app.tasks.do_work", "args": "bad"})
+
+
+def test_from_dict_defaults_retry_to_zero() -> None:
+    created_at = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
+    payload = TaskPayload.from_dict(
+        {
+            "function_path": "app.tasks.do_work",
+            "args": [],
+            "kwargs": {},
+            "created_at": created_at.isoformat(),
+        }
+    )
+    assert payload.retry == 0
+
+
+def test_from_dict_rejects_invalid_retry_type() -> None:
+    with pytest.raises(TypeError, match="payload retry must be an int"):
+        TaskPayload.from_dict(
+            {
+                "function_path": "app.tasks.do_work",
+                "args": [],
+                "kwargs": {},
+                "created_at": datetime(2026, 6, 15, 12, 0, tzinfo=UTC).isoformat(),
+                "retry": "bad",
+            }
+        )
+
+
+def test_with_retry_returns_updated_payload() -> None:
+    created_at = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
+    original = TaskPayload(
+        function_path="app.tasks.do_work",
+        args=["hello"],
+        kwargs={"flag": True},
+        created_at=created_at,
+        expire_seconds=300.0,
+        retry=1,
+    )
+    updated = original.with_retry(2)
+    assert updated.retry == 2
+    assert updated.function_path == original.function_path
+    assert updated.args == original.args
+    assert updated.kwargs == original.kwargs
+    assert updated.created_at == original.created_at
+    assert updated.expire_seconds == original.expire_seconds

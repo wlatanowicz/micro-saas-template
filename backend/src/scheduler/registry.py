@@ -18,6 +18,7 @@ class RegisteredTask:
     crontab: Cron | None = None
     interval: timedelta | None = None
     expire: timedelta | None = None
+    max_retries: int = 0
 
 
 def iter_scheduled_tasks() -> Iterator[RegisteredTask]:

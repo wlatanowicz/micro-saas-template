@@ -22,7 +22,11 @@ def enqueue_task(registered: RegisteredTask, *args: Any, **kwargs: Any) -> Any:
         return registered.function(*args, **kwargs)
     if transport == "sqs":
         task_payload = TaskPayload.for_task(registered, *args, **kwargs)
-        url = scheduler_config.queue_url(registered.queue)
-        return send_sqs_message(queue_url=url, payload=task_payload.to_dict())
+        return enqueue_payload(registered, task_payload)
     msg = f"unsupported SCHEDULER_TRANSPORT: {transport}"
     raise ConfigurationError(msg)
+
+
+def enqueue_payload(registered: RegisteredTask, payload: TaskPayload) -> str:
+    url = scheduler_config.queue_url(registered.queue)
+    return send_sqs_message(queue_url=url, payload=payload.to_dict())

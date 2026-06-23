@@ -20,6 +20,7 @@ def task(
     crontab: str | Cron | None = None,
     interval: timedelta | None = None,
     expire: timedelta | None = None,
+    max_retries: int = 0,
 ) -> Callable[[_F], _F]:
     parsed_crontab, parsed_interval = validate_schedule_options(
         crontab=crontab,
@@ -38,6 +39,7 @@ def task(
             crontab=parsed_crontab,
             interval=parsed_interval,
             expire=expire,
+            max_retries=max_retries,
         )
         TASK_REGISTRY[function_path] = registered
 

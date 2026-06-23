@@ -24,6 +24,7 @@ def test_task_registers_in_global_registry() -> None:
     assert registered.crontab is None
     assert registered.interval is None
     assert registered.expire is None
+    assert registered.max_retries == 0
     assert callable(send_message)
     assert callable(send_message.enqueue)
 
@@ -92,3 +93,15 @@ def test_task_registers_expire() -> None:
     path = f"{send_message.__module__}.{send_message.__qualname__}"
     registered = TASK_REGISTRY[path]
     assert registered.expire == timedelta(minutes=10)
+
+
+def test_task_registers_max_retries() -> None:
+    TASK_REGISTRY.clear()
+
+    @scheduler.task(queue="MESSAGES", max_retries=3)
+    def send_message(sender: str) -> None:
+        del sender
+
+    path = f"{send_message.__module__}.{send_message.__qualname__}"
+    registered = TASK_REGISTRY[path]
+    assert registered.max_retries == 3

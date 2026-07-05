@@ -195,8 +195,9 @@ cf_verify_cname() {
   local zone_id="$1"
   local record_fqdn="$2"
   local expected_target="${3%.}"
+  local expected_proxied="${4:-false}"
 
-  local record_id content
+  local record_id content proxied
   record_id="$(cf_list_cname_record_id "${zone_id}" "${record_fqdn}")"
   if [[ -z "${record_id}" ]]; then
     echo "Cloudflare verification failed: CNAME ${record_fqdn} not found after upsert." >&2
@@ -206,8 +207,13 @@ cf_verify_cname() {
   cf_curl_json GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}"
   cf_json_success || cf_fail_api "read DNS record ${record_id}"
   content="$(echo "${CF_LAST_JSON}" | jq -r '.result.content // empty' | sed 's/\.$//')"
+  proxied="$(echo "${CF_LAST_JSON}" | jq -r '.result.proxied // false')"
   if [[ "${content}" != "${expected_target}" ]]; then
     echo "Cloudflare verification failed: CNAME ${record_fqdn} points to ${content}, expected ${expected_target}." >&2
+    exit 1
+  fi
+  if [[ "${proxied}" != "${expected_proxied}" ]]; then
+    echo "Cloudflare verification failed: CNAME ${record_fqdn} proxied=${proxied}, expected proxied=${expected_proxied}." >&2
     exit 1
   fi
 }
@@ -215,6 +221,7 @@ cf_verify_cname() {
 cf_ensure_cname() {
   local record_fqdn="$1"
   local target="${2%.}"
+  local proxied="${3:-false}"
 
   cf_require_token
   cf_resolve_zone_for_fqdn "${record_fqdn}"
@@ -222,22 +229,37 @@ cf_ensure_cname() {
   local zone_id="${CF_ZONE_ID}"
   local zone_name="${CF_ZONE_NAME}"
   local record_name="${CF_RECORD_NAME}"
+  local proxy_label="DNS only"
+  [[ "${proxied}" == "true" ]] && proxy_label="proxied"
 
-  echo "Cloudflare zone ${zone_name} (${zone_id}): ensuring CNAME ${record_fqdn} -> ${target}..."
+  echo "Cloudflare zone ${zone_name} (${zone_id}): ensuring CNAME ${record_fqdn} -> ${target} (${proxy_label})..."
 
-  local record_id action
+  local record_id action payload
   record_id="$(cf_list_cname_record_id "${zone_id}" "${record_fqdn}")"
   if [[ -n "${record_id}" ]]; then
     action="updated"
+    payload="$(jq -n \
+      --arg content "${target}" \
+      --argjson proxied "${proxied}" \
+      '{type: "CNAME", content: $content, proxied: $proxied}')"
     cf_curl_json PATCH "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}" \
-      "$(jq -n --arg content "${target}" '{type: "CNAME", content: $content, proxied: false}')"
+      "${payload}"
   else
     action="created"
-    cf_curl_json POST "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records" \
-      "$(jq -n \
+    if [[ "${proxied}" == "true" ]]; then
+      payload="$(jq -n \
+        --arg name "${record_name}" \
+        --arg content "${target}" \
+        --argjson proxied true \
+        '{type: "CNAME", name: $name, content: $content, proxied: $proxied}')"
+    else
+      payload="$(jq -n \
         --arg name "${record_name}" \
         --arg content "${target}" \
         '{type: "CNAME", name: $name, content: $content, ttl: 300, proxied: false}')"
+    fi
+    cf_curl_json POST "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records" \
+      "${payload}"
   fi
 
   cf_json_success || cf_fail_api "DNS upsert for ${record_fqdn}"
@@ -250,6 +272,6 @@ cf_ensure_cname() {
     exit 1
   fi
 
-  cf_verify_cname "${zone_id}" "${record_fqdn}" "${target}"
-  echo "Cloudflare DNS ${action}: ${record_fqdn} -> ${target} (record ${result_id})."
+  cf_verify_cname "${zone_id}" "${record_fqdn}" "${target}" "${proxied}"
+  echo "Cloudflare DNS ${action}: ${record_fqdn} -> ${target} (${proxy_label}, record ${result_id})."
 }

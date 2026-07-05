@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Point the stack's frontend custom domain (CloudFront alias) at the distribution's
-# *.cloudfront.net hostname via Cloudflare DNS (CNAME, DNS only — TLS at CloudFront).
+# *.cloudfront.net hostname via Cloudflare DNS (proxied CNAME — traffic flows through the Cloudflare edge).
 set -euo pipefail
 
 # Usage: ./scripts/update-cloudflare-frontend-cname.sh <stage> <region> [stack_name]
@@ -48,4 +48,4 @@ if [[ -z "${CLOUDFRONT_DOMAIN}" || "${CLOUDFRONT_DOMAIN}" == "None" ]]; then
   cf_skip_or_fail "Cloudflare: CloudFront domain output missing"
 fi
 
-cf_ensure_cname "${FRONTEND_CUSTOM_DOMAIN}" "${CLOUDFRONT_DOMAIN}"
+cf_ensure_cname "${FRONTEND_CUSTOM_DOMAIN}" "${CLOUDFRONT_DOMAIN}" true

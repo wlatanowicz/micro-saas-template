@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Point the stack's API custom domain at the regional API Gateway hostname via Cloudflare DNS
-# (CNAME, DNS only — TLS terminates at API Gateway).
+# (proxied CNAME — traffic flows through the Cloudflare edge).
 set -euo pipefail
 
 # Usage: ./scripts/update-cloudflare-api-cname.sh <stage> <region> [stack_name]
@@ -48,4 +48,4 @@ if [[ -z "${API_CUSTOM_TARGET}" || "${API_CUSTOM_TARGET}" == "None" ]]; then
   cf_skip_or_fail "Cloudflare: ApiCustomDomainTarget output missing"
 fi
 
-cf_ensure_cname "${API_CUSTOM_DOMAIN}" "${API_CUSTOM_TARGET}"
+cf_ensure_cname "${API_CUSTOM_DOMAIN}" "${API_CUSTOM_TARGET}" true

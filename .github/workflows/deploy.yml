@@ -76,7 +76,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_ZONE_NAME: ${{ secrets.CLOUDFLARE_ZONE_NAME }}
+          CLOUDFLARE_ZONE_NAME: ${{ vars.CLOUDFLARE_ZONE_NAME != '' && vars.CLOUDFLARE_ZONE_NAME || secrets.CLOUDFLARE_ZONE_NAME }}
         run: bash scripts/update-cloudflare-api-cname.sh "${STAGE}" "${REGION}"
 
       - name: Install frontend dependencies
@@ -90,5 +90,5 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_ZONE_NAME: ${{ secrets.CLOUDFLARE_ZONE_NAME }}
+          CLOUDFLARE_ZONE_NAME: ${{ vars.CLOUDFLARE_ZONE_NAME != '' && vars.CLOUDFLARE_ZONE_NAME || secrets.CLOUDFLARE_ZONE_NAME }}
         run: bash scripts/update-cloudflare-frontend-cname.sh "${STAGE}" "${REGION}"

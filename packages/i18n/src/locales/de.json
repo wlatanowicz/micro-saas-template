@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Micro-SaaS-Vorlage",
-    "subtitle": "React-Frontend für die FastAPI Lambda API.",
+    "subtitle": "Client für die FastAPI Lambda API.",
     "notSignedIn": "Nicht angemeldet",
     "signOut": "Abmelden"
   },
@@ -17,7 +17,7 @@
   "errors": {
     "configuration": "Konfigurationsfehler",
     "requestFailed": "Anfrage fehlgeschlagen",
-    "apiBaseNotSet": "VITE_API_BASE_URL ist nicht gesetzt. Für lokale Entwicklung oder Deployment konfigurieren.",
+    "apiBaseNotSet": "API-Basis-URL ist nicht gesetzt. Für lokale Entwicklung oder Deployment konfigurieren.",
     "healthCheckFailed": "Gesundheitsprüfung fehlgeschlagen: {{status}}",
     "itemsRequestFailed": "Elementanfrage fehlgeschlagen: {{status}}",
     "api": {

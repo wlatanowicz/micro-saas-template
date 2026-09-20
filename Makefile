@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help docker-start migrate make-migrations check test test-be test-be-ci lint-be
+.PHONY: help docker-start migrate make-migrations check test test-be test-be-ci lint-be test-shared typecheck typecheck-fe typecheck-mobile run-mobile
 
 # Ephemeral Postgres for `make test-be` (avoid colliding with a local dev DB)
 TEST_DB_PORT ?= 5433
@@ -46,9 +46,25 @@ test-be-ci: ## Run backend tests using DATABASE_URL from the environment (migrat
 lint-be: ## Run Ruff on backend Python tree
 	cd backend && uv run ruff check src tests conftest.py
 
-test: test-be ## Run automated tests (backend integration suite; no frontend test script yet)
+test-shared: ## Run shared TypeScript package tests
+	npm test --workspace=@micro-saas/api-client
 
-check: ## Run backend Postgres tests, Ruff, and Lambda requirements export (CI parity subset)
+typecheck-fe: ## Typecheck the web frontend
+	npm run typecheck --workspace=micro-saas-frontend
+
+typecheck-mobile: ## Typecheck the Expo app
+	npm run typecheck --workspace=mobile
+
+typecheck: typecheck-fe typecheck-mobile ## Typecheck TypeScript clients
+
+run-mobile: ## Start the Expo dev server
+	npm start --workspace=mobile
+
+test: test-be test-shared ## Run automated tests (backend integration suite and shared packages)
+
+check: ## Run tests, typechecks, Ruff, and Lambda requirements export (CI parity subset)
 	$(MAKE) test-be
 	$(MAKE) lint-be
+	$(MAKE) test-shared
+	$(MAKE) typecheck
 	cd backend && uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements-lambda.txt

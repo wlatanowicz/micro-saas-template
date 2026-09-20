@@ -1,0 +1,12 @@
+.git
+.github
+backend
+docs
+scripts
+**/.venv
+**/node_modules
+**/.expo
+backend/var
+.env
+.env.gha
+*.local

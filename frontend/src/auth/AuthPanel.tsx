@@ -2,7 +2,7 @@ import { Alert, Button, Divider, Paper, Stack, Title } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { apiBase } from "./api";
+import { oauthStartUrl } from "./api";
 import { PasswordRecoveryWizard } from "./PasswordRecoveryWizard";
 import { SignInForm } from "./SignInForm";
 import { SignUpWizard } from "./SignUpWizard";
@@ -52,7 +52,7 @@ export function AuthPanel({ authConfig, onSession, initialError = null }: AuthPa
             {methods.google ? (
               <Button
                 component="a"
-                href={`${apiBase()}/api/auth/google`}
+                href={oauthStartUrl("google")}
                 variant="default"
                 fullWidth
               >
@@ -62,7 +62,7 @@ export function AuthPanel({ authConfig, onSession, initialError = null }: AuthPa
             {methods.facebook ? (
               <Button
                 component="a"
-                href={`${apiBase()}/api/auth/facebook`}
+                href={oauthStartUrl("facebook")}
                 variant="default"
                 fullWidth
               >

@@ -13,21 +13,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AuthPanel } from "./auth/AuthPanel";
-import { apiBase, fetchAuthConfig, loadMe, parseOAuthHash } from "./auth/api";
-import type { AuthConfig, MeUser } from "./auth/types";
+import { fetchAuthConfig, fetchHealth, fetchItems, loadMe, parseOAuthHash } from "./auth/api";
+import type { AuthConfig, Health, ItemsResponse, MeUser } from "./auth/types";
 import { LanguageSelector } from "./i18n/LanguageSelector";
 import { translateApiError } from "./i18n/translateApiError";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const ACCESS_TOKEN_KEY = "access_token";
-
-type Health = { status: string; database_configured: boolean };
-
-type ItemsResponse = {
-  items: { id: number; name: string }[];
-  detail?: string;
-  detail_code?: string;
-};
 
 export function App() {
   const { t } = useTranslation();
@@ -49,10 +41,6 @@ export function App() {
 
   const restoreSession = useCallback(
     async (token: string) => {
-      const base = apiBase();
-      if (!base) {
-        return;
-      }
       const r = await loadMe(token);
       if (!r.ok) {
         if (r.status === 401 || r.status === 403) {
@@ -60,7 +48,7 @@ export function App() {
         }
         return;
       }
-      setCurrentUser((await r.json()) as MeUser);
+      setCurrentUser(r.data);
     },
     [clearSession],
   );
@@ -71,8 +59,6 @@ export function App() {
       return;
     }
 
-    const base = apiBase();
-
     void (async () => {
       try {
         const oauthResult = parseOAuthHash();
@@ -80,22 +66,22 @@ export function App() {
           setAuthError(translateApiError(t, oauthResult.authErrorCode));
         }
 
-        const h = await fetch(`${base}/health`);
+        const h = await fetchHealth();
         if (!h.ok) {
           throw new Error(t("errors.healthCheckFailed", { status: h.status }));
         }
-        setHealth((await h.json()) as Health);
+        setHealth(h.data);
 
         const config = await fetchAuthConfig();
         if (config) {
           setAuthConfig(config);
         }
 
-        const i = await fetch(`${base}/api/items`);
+        const i = await fetchItems();
         if (!i.ok) {
           throw new Error(t("errors.itemsRequestFailed", { status: i.status }));
         }
-        setItems((await i.json()) as ItemsResponse);
+        setItems(i.data);
 
         const tkn = oauthResult.accessToken ?? getStoredToken();
         if (tkn) {

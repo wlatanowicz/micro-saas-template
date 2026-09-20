@@ -17,6 +17,22 @@ node_modules/
 npm-debug.log*
 frontend/dist/
 
+# Expo / React Native
+.expo/
+.expo-shared/
+.metro-health-check*
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.ipa
+*.apk
+*.aab
+mobile/ios/
+mobile/android/
+mobile/expo-env.d.ts
+
+
 # Serverless
 .serverless/
 .requirements/

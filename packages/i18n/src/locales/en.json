@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Micro-SaaS template",
-    "subtitle": "React frontend talking to the FastAPI Lambda API.",
+    "subtitle": "Client talking to the FastAPI Lambda API.",
     "notSignedIn": "Not signed in",
     "signOut": "Sign out"
   },
@@ -17,7 +17,7 @@
   "errors": {
     "configuration": "Configuration error",
     "requestFailed": "Request failed",
-    "apiBaseNotSet": "VITE_API_BASE_URL is not set. Configure it for local dev or deploy.",
+    "apiBaseNotSet": "API base URL is not set. Configure it for local development or deploy.",
     "healthCheckFailed": "Health check failed: {{status}}",
     "itemsRequestFailed": "Items request failed: {{status}}",
     "api": {

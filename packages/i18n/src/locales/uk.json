@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Шаблон Micro-SaaS",
-    "subtitle": "React фронтенд, що працює з FastAPI Lambda API.",
+    "subtitle": "Клієнт, що працює з FastAPI Lambda API.",
     "notSignedIn": "Не ввійшли",
     "signOut": "Вийти"
   },
@@ -17,7 +17,7 @@
   "errors": {
     "configuration": "Помилка конфігурації",
     "requestFailed": "Запит не виконано",
-    "apiBaseNotSet": "VITE_API_BASE_URL не налаштовано. Налаштуйте для локальної розробки або розгортання.",
+    "apiBaseNotSet": "Базову URL-адресу API не налаштовано. Налаштуйте для локальної розробки або розгортання.",
     "healthCheckFailed": "Перевірка стану не виконана: {{status}}",
     "itemsRequestFailed": "Запит елементів не виконано: {{status}}",
     "api": {

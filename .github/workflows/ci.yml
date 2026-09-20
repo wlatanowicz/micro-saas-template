@@ -51,7 +51,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: |
             backend/package-lock.json
-            frontend/package-lock.json
+            package-lock.json
 
       - name: Install backend Python dependencies
         run: uv sync --frozen --all-groups
@@ -77,12 +77,17 @@ jobs:
         run: npx serverless@3 print >/dev/null
         working-directory: backend
 
-      - name: Install frontend dependencies
+      - name: Install JS workspace dependencies
         run: npm ci
-        working-directory: frontend
+
+      - name: Shared package tests
+        run: npm test --workspace=@micro-saas/api-client
 
       - name: Build frontend
         env:
           VITE_API_BASE_URL: http://127.0.0.1:8000
         run: npm run build
         working-directory: frontend
+
+      - name: Typecheck mobile
+        run: npm run typecheck --workspace=mobile

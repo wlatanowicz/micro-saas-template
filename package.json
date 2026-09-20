@@ -1,0 +1,9 @@
+{
+  "name": "micro-saas-template",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "mobile",
+    "packages/*"
+  ]
+}

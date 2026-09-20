@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Szablon Micro-SaaS",
-    "subtitle": "Frontend React komunikujący się z API FastAPI Lambda.",
+    "subtitle": "Klient komunikujący się z API FastAPI Lambda.",
     "notSignedIn": "Nie zalogowany",
     "signOut": "Wyloguj"
   },
@@ -17,7 +17,7 @@
   "errors": {
     "configuration": "Błąd konfiguracji",
     "requestFailed": "Żądanie nie powiodło się",
-    "apiBaseNotSet": "VITE_API_BASE_URL nie jest ustawiony. Skonfiguruj go do lokalnego rozwoju lub wdrożenia.",
+    "apiBaseNotSet": "Adres bazowy API nie jest ustawiony. Skonfiguruj go do lokalnego rozwoju lub wdrożenia.",
     "healthCheckFailed": "Sprawdzenie stanu nie powiodło się: {{status}}",
     "itemsRequestFailed": "Żądanie elementów nie powiodło się: {{status}}",
     "api": {

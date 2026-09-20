@@ -1,5 +1,5 @@
 from src.config import CORS_ALLOW_ORIGINS
-from src.utils.env import env_bool, env_int, env_str
+from src.utils.env import env_bool, env_int, env_list, env_str
 
 AUTH_PASSWORD_ENABLED = env_bool("AUTH_PASSWORD_ENABLED", default=True)
 AUTH_GOOGLE_ENABLED = env_bool("AUTH_GOOGLE_ENABLED", default=False)
@@ -24,3 +24,9 @@ elif CORS_ALLOW_ORIGINS and CORS_ALLOW_ORIGINS != ["*"]:
     AUTH_FRONTEND_URL = CORS_ALLOW_ORIGINS[0].rstrip("/")
 else:
     AUTH_FRONTEND_URL = "http://localhost:5173"
+
+AUTH_OAUTH_NATIVE_SCHEMES = [
+    scheme.lower()
+    for scheme in (env_list("AUTH_OAUTH_NATIVE_SCHEMES", default=["micro-saas", "exp"]) or [])
+    if scheme
+]

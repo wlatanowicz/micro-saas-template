@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import jwt
 from authlib.integrations.starlette_client import OAuth
@@ -58,25 +58,28 @@ def reset_oauth_registration() -> None:
     oauth._clients.clear()
 
 
-def create_oauth_state(provider: AuthProviderName) -> str:
+def create_oauth_state(provider: AuthProviderName, redirect_uri: str | None = None) -> str:
     secret = config.JWT_SECRET
     if not secret:
         msg = "JWT_SECRET is not configured"
         raise RuntimeError(msg)
     expire = datetime.now(UTC) + timedelta(minutes=STATE_TTL_MINUTES)
+    payload: dict[str, object] = {
+        "purpose": "oauth_state",
+        "provider": provider,
+        "nonce": secrets.token_urlsafe(16),
+        "exp": expire,
+    }
+    if redirect_uri:
+        payload["redirect_uri"] = redirect_uri
     return jwt.encode(
-        {
-            "purpose": "oauth_state",
-            "provider": provider,
-            "nonce": secrets.token_urlsafe(16),
-            "exp": expire,
-        },
+        payload,
         secret,
         algorithm="HS256",
     )
 
 
-def verify_oauth_state(state: str, provider: AuthProviderName) -> None:
+def verify_oauth_state(state: str, provider: AuthProviderName) -> str | None:
     secret = config.JWT_SECRET
     if not secret:
         msg = "JWT_SECRET is not configured"
@@ -95,32 +98,70 @@ def verify_oauth_state(state: str, provider: AuthProviderName) -> None:
             "invalid oauth state",
             status_code=400,
         )
+    redirect_uri = payload.get("redirect_uri")
+    if isinstance(redirect_uri, str) and redirect_uri:
+        return redirect_uri
+    return None
+
+
+def is_allowed_oauth_client_redirect(uri: str) -> bool:
+    parsed = urlparse(uri)
+    if not parsed.scheme:
+        return False
+    scheme = parsed.scheme.lower()
+    if scheme in {"http", "https"}:
+        frontend = urlparse(config.AUTH_FRONTEND_URL)
+        return (
+            scheme == frontend.scheme.lower()
+            and parsed.netloc.lower() == frontend.netloc.lower()
+        )
+    return scheme in {s.lower() for s in config.AUTH_OAUTH_NATIVE_SCHEMES}
+
+
+def _is_native_redirect(uri: str) -> bool:
+    return urlparse(uri).scheme.lower() not in {"http", "https"}
+
+
+def build_client_redirect(redirect_uri: str | None, params: dict[str, str]) -> str:
+    target = redirect_uri or config.AUTH_FRONTEND_URL
+    parsed = urlparse(target)
+    if _is_native_redirect(target):
+        existing = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        existing.update(params)
+        return urlunparse(parsed._replace(query=urlencode(existing), fragment=""))
+    return urlunparse(parsed._replace(fragment=urlencode(params)))
 
 
 def build_redirect_uri(request: Request, callback_name: str) -> str:
     return str(request.url_for(callback_name))
 
 
-def oauth_success_redirect(user: User) -> RedirectResponse:
+def oauth_success_redirect(user: User, redirect_uri: str | None = None) -> RedirectResponse:
     token = create_access_token(user.id)
     return RedirectResponse(
-        url=f"{config.AUTH_FRONTEND_URL}#access_token={quote(token)}&token_type=bearer",
+        url=build_client_redirect(
+            redirect_uri,
+            {"access_token": token, "token_type": "bearer"},
+        ),
         status_code=302,
     )
 
 
-def oauth_error_redirect(code: str) -> RedirectResponse:
+def oauth_error_redirect(code: str, redirect_uri: str | None = None) -> RedirectResponse:
     return RedirectResponse(
-        url=f"{config.AUTH_FRONTEND_URL}#auth_error_code={quote(code)}",
+        url=build_client_redirect(redirect_uri, {"auth_error_code": code}),
         status_code=302,
     )
 
 
-def _oauth_error_redirect_from_exception(exc: HTTPException) -> RedirectResponse:
+def _oauth_error_redirect_from_exception(
+    exc: HTTPException,
+    redirect_uri: str | None = None,
+) -> RedirectResponse:
     code = api_error_code_from_detail(exc.detail)
     if code is None:
         code = CommonApiErrorCode.request_validation_error
-    return oauth_error_redirect(code)
+    return oauth_error_redirect(code, redirect_uri)
 
 
 def resolve_oauth_user(
@@ -191,7 +232,17 @@ async def authorize_redirect(
     callback_name: str,
 ) -> RedirectResponse:
     ensure_oauth_clients_registered()
-    state = create_oauth_state(provider)
+    requested = request.query_params.get("redirect_uri")
+    client_redirect: str | None = None
+    if requested:
+        if not is_allowed_oauth_client_redirect(requested):
+            raise_api_error(
+                CommonApiErrorCode.request_validation_error,
+                "invalid oauth redirect_uri",
+                status_code=400,
+            )
+        client_redirect = requested
+    state = create_oauth_state(provider, client_redirect)
     redirect_uri = build_redirect_uri(request, callback_name)
     client = oauth.create_client(provider)
     if client is None:
@@ -207,47 +258,53 @@ async def authorize_redirect(
 async def complete_google_callback(request: Request, session: Session) -> RedirectResponse:
     ensure_oauth_clients_registered()
     state = request.query_params.get("state", "")
-    verify_oauth_state(state, "google")
+    try:
+        client_redirect = verify_oauth_state(state, "google")
+    except HTTPException as exc:
+        return _oauth_error_redirect_from_exception(exc)
     client = oauth.create_client("google")
     if client is None:
-        return oauth_error_redirect(ApiErrorCode.oauth_provider_not_configured)
+        return oauth_error_redirect(ApiErrorCode.oauth_provider_not_configured, client_redirect)
     try:
         token = await client.authorize_access_token(request)
     except Exception:
-        return oauth_error_redirect(ApiErrorCode.oauth_authorization_failed)
+        return oauth_error_redirect(ApiErrorCode.oauth_authorization_failed, client_redirect)
     userinfo = token.get("userinfo")
     if not userinfo:
-        return oauth_error_redirect(ApiErrorCode.oauth_profile_missing)
+        return oauth_error_redirect(ApiErrorCode.oauth_profile_missing, client_redirect)
     subject = userinfo.get("sub")
     email = userinfo.get("email")
     if not subject or not email:
-        return oauth_error_redirect(ApiErrorCode.oauth_email_not_available)
+        return oauth_error_redirect(ApiErrorCode.oauth_email_not_available, client_redirect)
     try:
         user = resolve_oauth_user(session, AuthProvider.google, str(subject), str(email))
     except HTTPException as exc:
-        return _oauth_error_redirect_from_exception(exc)
-    return oauth_success_redirect(user)
+        return _oauth_error_redirect_from_exception(exc, client_redirect)
+    return oauth_success_redirect(user, client_redirect)
 
 
 async def complete_facebook_callback(request: Request, session: Session) -> RedirectResponse:
     ensure_oauth_clients_registered()
     state = request.query_params.get("state", "")
-    verify_oauth_state(state, "facebook")
+    try:
+        client_redirect = verify_oauth_state(state, "facebook")
+    except HTTPException as exc:
+        return _oauth_error_redirect_from_exception(exc)
     client = oauth.create_client("facebook")
     if client is None:
-        return oauth_error_redirect(ApiErrorCode.oauth_provider_not_configured)
+        return oauth_error_redirect(ApiErrorCode.oauth_provider_not_configured, client_redirect)
     try:
         token = await client.authorize_access_token(request)
         resp = await client.get("me?fields=id,email", token=token)
         profile = resp.json()
     except Exception:
-        return oauth_error_redirect(ApiErrorCode.oauth_authorization_failed)
+        return oauth_error_redirect(ApiErrorCode.oauth_authorization_failed, client_redirect)
     subject = profile.get("id")
     email = profile.get("email")
     if not subject or not email:
-        return oauth_error_redirect(ApiErrorCode.oauth_email_not_available)
+        return oauth_error_redirect(ApiErrorCode.oauth_email_not_available, client_redirect)
     try:
         user = resolve_oauth_user(session, AuthProvider.facebook, str(subject), str(email))
     except HTTPException as exc:
-        return _oauth_error_redirect_from_exception(exc)
-    return oauth_success_redirect(user)
+        return _oauth_error_redirect_from_exception(exc, client_redirect)
+    return oauth_success_redirect(user, client_redirect)

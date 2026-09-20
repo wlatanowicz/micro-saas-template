@@ -10,6 +10,7 @@ from src.apps.users.auth import hash_password
 from src.apps.users.models import AuthProvider, User, UserIdentity, UserStatus
 from src.apps.users.oauth import (
     create_oauth_state,
+    is_allowed_oauth_client_redirect,
     reset_oauth_registration,
     resolve_oauth_user,
     verify_oauth_state,
@@ -24,7 +25,27 @@ def test_create_and_verify_oauth_state(monkeypatch: pytest.MonkeyPatch) -> None:
         "test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci",
     )
     state = create_oauth_state("google")
-    verify_oauth_state(state, "google")
+    assert verify_oauth_state(state, "google") is None
+
+
+def test_oauth_state_round_trips_native_redirect(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.apps.users.config.JWT_SECRET",
+        "test-jwt-secret-key-at-least-thirty-two-chars-for-local-and-ci",
+    )
+    state = create_oauth_state("google", "micro-saas://oauth")
+    assert verify_oauth_state(state, "google") == "micro-saas://oauth"
+
+
+def test_allowed_oauth_client_redirect(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.apps.users.config.AUTH_FRONTEND_URL", "http://localhost:5173")
+    monkeypatch.setattr("src.apps.users.config.AUTH_OAUTH_NATIVE_SCHEMES", ["micro-saas", "exp"])
+    assert is_allowed_oauth_client_redirect("http://localhost:5173")
+    assert is_allowed_oauth_client_redirect("http://localhost:5173/oauth")
+    assert is_allowed_oauth_client_redirect("micro-saas://oauth")
+    assert is_allowed_oauth_client_redirect("exp://192.168.1.5:8081/--/oauth")
+    assert not is_allowed_oauth_client_redirect("https://evil.example/steal")
+    assert not is_allowed_oauth_client_redirect("javascript:alert(1)")
 
 
 def test_verify_oauth_state_rejects_wrong_provider(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -134,6 +155,52 @@ def test_google_callback_creates_user(auth_client: TestClient, monkeypatch) -> N
         ).first()
         assert user is not None
         assert user.hashed_password is None
+
+
+def test_google_callback_uses_native_query_redirect(auth_client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_ENABLED", True)
+    monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_CLIENT_ID", "test-google-id")
+    monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_CLIENT_SECRET", "test-google-secret")
+    monkeypatch.setattr("src.apps.users.config.AUTH_FRONTEND_URL", "http://localhost:5173")
+    monkeypatch.setattr("src.apps.users.config.AUTH_OAUTH_NATIVE_SCHEMES", ["micro-saas", "exp"])
+    reset_oauth_registration()
+
+    from src.apps.users import oauth as oauth_mod
+
+    async def fake_authorize_access_token(request):  # noqa: ARG001
+        return {"userinfo": {"sub": "g-callback-native", "email": "native@example.com"}}
+
+    class FakeClient:
+        authorize_access_token = staticmethod(fake_authorize_access_token)
+
+    monkeypatch.setattr(
+        oauth_mod.oauth,
+        "create_client",
+        lambda name: FakeClient() if name == "google" else None,
+    )
+
+    state = create_oauth_state("google", "micro-saas://oauth")
+    r = auth_client.get(
+        f"/api/auth/google/callback?code=fake&state={state}",
+        follow_redirects=False,
+    )
+    assert r.status_code == 302
+    location = r.headers["location"]
+    assert location.startswith("micro-saas://oauth?")
+    assert "access_token=" in location
+
+
+def test_google_start_rejects_unknown_redirect(auth_client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_ENABLED", True)
+    monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_CLIENT_ID", "test-google-id")
+    monkeypatch.setattr("src.apps.users.config.AUTH_GOOGLE_CLIENT_SECRET", "test-google-secret")
+    monkeypatch.setattr("src.apps.users.config.AUTH_OAUTH_NATIVE_SCHEMES", ["micro-saas", "exp"])
+    r = auth_client.get(
+        "/api/auth/google?redirect_uri=https://evil.example/steal",
+        follow_redirects=False,
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "request_validation_error"
 
 
 def test_google_start_disabled(auth_client: TestClient, monkeypatch) -> None:

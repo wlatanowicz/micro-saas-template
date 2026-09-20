@@ -1,18 +1,20 @@
 # Micro-SaaS template
 
-Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP API + **Mangum**), **SQLModel** + **Alembic** against an **existing database** (nothing provisioned in AWS for data), and a **Vite + React** SPA on **S3** + **CloudFront**. CI/CD mirrors the **water_meter**-style flow (Serverless v3, OIDC, S3 deploy, CloudFront invalidation, optional Cloudflare DNS).
+Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP API + **Mangum**), **SQLModel** + **Alembic** against an **existing database** (nothing provisioned in AWS for data), a **Vite + React** SPA on **S3** + **CloudFront**, and an **Expo** mobile app that shares API/i18n packages with the SPA. CI/CD mirrors the **water_meter**-style flow (Serverless v3, OIDC, S3 deploy, CloudFront invalidation, optional Cloudflare DNS).
 
 ## Layout
 
 - `backend/` — Serverless stack, FastAPI app, Alembic migrations
 - `frontend/` — React SPA (`VITE_API_BASE_URL` injected at build time)
+- `mobile/` — Expo app (`EXPO_PUBLIC_API_BASE_URL`; Expo Go via `make run-mobile`)
+- `packages/` — Shared TypeScript (`@micro-saas/api-client`, `@micro-saas/i18n`) used by web and mobile
 - `scripts/` — Deploy frontend to S3 + invalidate CloudFront; invoke migration Lambda; optional Cloudflare CNAME updates (frontend + API); **`collect-gha-env.sh`** builds **`.env.gha`** for GitHub Actions from AWS + prompts; **`push-gha-env.sh`** uploads **`.env.gha`** to repo Actions secrets/variables via **`gh`**
 - `docs/` — GitHub Actions OIDC setup and **[downstream template tracking](docs/downstream-template-tracking.md)** (how product repos record their MST bootstrap commit)
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/) (Python toolchain and lockfile-driven installs)
-- Node.js 22+ and npm (Serverless CLI + frontend build)
+- Node.js 22+ and npm (Serverless CLI + JS workspaces: frontend, mobile, shared packages)
 - Python 3.11 (matches `serverless.yml` runtime; uv will install/use it via `setup-uv` in CI)
 - AWS account; optional **ACM certificate in us-east-1** only if you use a **custom frontend hostname** on CloudFront; optional **ACM certificate in the deploy region** (e.g. eu-central-1) for a **custom API hostname** on API Gateway
 - PostgreSQL (or compatible) URL for `DATABASE_URL` if you use the API routes that touch the DB
@@ -24,7 +26,7 @@ Monorepo template for small SaaS products: **FastAPI** on **AWS Lambda** (HTTP A
 3. Optional: set **`FRONTEND_DOMAIN_NAME`** and **`FRONTEND_ACM_CERT_ARN`** (us-east-1) together when deploying. The certificate’s SAN must include that hostname; otherwise CloudFront returns an invalid CNAME error. If you omit either, the stack uses the default **\*.cloudfront.net** URL only.
 4. Optional: set **`API_DOMAIN_NAME`** and **`API_ACM_CERT_ARN`** (same region as **`AWS_REGION`**, e.g. eu-central-1) together for a custom API hostname (e.g. `api.example.com`). If **`API_DOMAIN_NAME`** is unset in GitHub Actions but **`FRONTEND_DOMAIN_NAME`** is set, deploy derives **`api.<frontend-host>`**. Omit both API vars to keep the default **execute-api** URL.
 5. Set **`DATABASE_URL`** for deploy (GitHub secret and/or local env). The **migration** Lambda uses it to reach your database. Lambdas run **outside a VPC** and connect over the network URL in **`DATABASE_URL`** (ensure RDS or your Postgres host allows inbound connections from the internet or your Lambda egress IPs, as appropriate).
-6. Copy `frontend/.env.example` to `frontend/.env` for local dev and set `VITE_API_BASE_URL` to your API URL (or local server).
+6. Copy `frontend/.env.example` to `frontend/.env` for local web dev and set `VITE_API_BASE_URL` to your API URL (or local server). Copy `mobile/.env.example` to `mobile/.env` and set `EXPO_PUBLIC_API_BASE_URL` (use `http://127.0.0.1:8000` in the simulator, or `http://<LAN-IP>:8000` on a physical device).
 7. Configure GitHub **Actions** secrets and variables (below). Grant the OIDC role **`lambda:InvokeFunction`** on the **`migrate`** function (see [docs/github-actions-aws-oidc.md](docs/github-actions-aws-oidc.md)).
 
 ## Local backend
@@ -92,12 +94,35 @@ uv run alembic revision --autogenerate -m "describe change"
 
 ## Local frontend
 
+From the repo root (npm workspaces):
+
 ```bash
-cd frontend
 npm install
+cd frontend
 cp .env.example .env
 # set VITE_API_BASE_URL=http://127.0.0.1:8000 in .env
 npm run dev
+```
+
+## Local mobile (Expo)
+
+Keep the API running (`make docker-start` or local uvicorn). Then:
+
+```bash
+npm install
+cp mobile/.env.example mobile/.env
+# Simulator: EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+# Physical device: EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:8000
+make run-mobile
+```
+
+Scan the QR code with Expo Go. OAuth native redirects use URL schemes `micro-saas` and `exp` (`AUTH_OAUTH_NATIVE_SCHEMES`). Google/Facebook still callback to the **API**; only the last hop (API → app) uses the native scheme.
+
+JS verification:
+
+```bash
+make test-shared
+make typecheck
 ```
 
 ## Email notifications (registration & password recovery)
@@ -146,7 +171,7 @@ Scripts accept an optional third argument: **CloudFormation stack name** (defaul
 
 ### `CI` (`.github/workflows/ci.yml`)
 
-Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `requirements-lambda.txt`, Serverless `print` on **`serverless.yml`**, frontend build.
+Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `requirements-lambda.txt`, Serverless `print` on **`serverless.yml`**, JS workspace install, shared package tests, frontend build, mobile typecheck.
 
 ### `Deploy` (`.github/workflows/deploy.yml`)
 

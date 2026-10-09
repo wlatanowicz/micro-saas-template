@@ -1,15 +1,6 @@
 name: Mobile Android test
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - mobile/**
-      - packages/**
-      - package.json
-      - package-lock.json
-      - .github/workflows/mobile-android-test.yml
   workflow_dispatch:
     inputs:
       api_base_url:

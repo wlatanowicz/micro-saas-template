@@ -175,7 +175,7 @@ Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `r
 
 ### `Mobile Android test` (`.github/workflows/mobile-android-test.yml`)
 
-Builds an installable Android test APK on pushes to `main` that touch `mobile/`, `packages/`, the root package manifests, or this workflow, and on `workflow_dispatch`. The APK is uploaded as the **`android-test-apk`** artifact (90 days). It is a release build signed with the Expo debug keystore (`android` / `androiddebugkey`), so it can be sideloaded. That signature is not a Play App Signing key.
+Builds an installable Android test APK when you run the workflow manually (`workflow_dispatch`). It does not run on push. The APK is uploaded as the **`android-test-apk`** artifact (90 days). It is a release build signed with the Expo debug keystore (`android` / `androiddebugkey`), so it can be sideloaded. That signature is not a Play App Signing key.
 
 `EXPO_PUBLIC_API_BASE_URL` is baked in at build time, in this order: the manual **`api_base_url`** input, the **`EXPO_PUBLIC_API_BASE_URL`** repository variable, `https://` plus **`API_DOMAIN_NAME`**, then `https://api.<FRONTEND_DOMAIN_NAME>`. The job fails when none of those is set. `android.versionCode` comes from the GitHub run number so a newer APK can replace the previous install.
 

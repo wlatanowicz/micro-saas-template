@@ -1,0 +1,64 @@
+name: Mobile EAS build
+
+# Disabled. To enable: remove `if: false` on the job, add the EXPO_TOKEN secret,
+# run `eas init` and commit extra.eas.projectId, store EXPO_PUBLIC_API_BASE_URL
+# as an EAS preview environment variable, and generate Android credentials once.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: API base URL baked into the build
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  eas-android:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install JS workspace dependencies
+        run: npm ci
+
+      - name: Resolve API base URL
+        env:
+          INPUT_API_BASE_URL: ${{ github.event.inputs.api_base_url }}
+          VAR_EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+          VAR_API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
+          VAR_FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_API_BASE_URL}" ]; then
+            url="${INPUT_API_BASE_URL}"
+          elif [ -n "${VAR_EXPO_PUBLIC_API_BASE_URL}" ]; then
+            url="${VAR_EXPO_PUBLIC_API_BASE_URL}"
+          elif [ -n "${VAR_API_DOMAIN_NAME}" ]; then
+            url="https://${VAR_API_DOMAIN_NAME}"
+          elif [ -n "${VAR_FRONTEND_DOMAIN_NAME}" ]; then
+            url="https://api.${VAR_FRONTEND_DOMAIN_NAME}"
+          else
+            echo "Set EXPO_PUBLIC_API_BASE_URL, or API_DOMAIN_NAME, or FRONTEND_DOMAIN_NAME. A manual run can also pass api_base_url."
+            exit 1
+          fi
+          echo "EXPO_PUBLIC_API_BASE_URL=${url}" >> "${GITHUB_ENV}"
+
+      - name: Build Android preview on EAS
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_NO_TELEMETRY: "1"
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: npx eas-cli build --platform android --profile preview --non-interactive

@@ -173,6 +173,32 @@ Scripts accept an optional third argument: **CloudFormation stack name** (defaul
 
 Runs on every push and pull request: **uv** (`uv sync`, tests, Ruff), exports `requirements-lambda.txt`, Serverless `print` on **`serverless.yml`**, JS workspace install, shared package tests, frontend build, mobile typecheck.
 
+### `Mobile Android test` (`.github/workflows/mobile-android-test.yml`)
+
+Builds an installable Android test APK on pushes to `main` that touch `mobile/`, `packages/`, the root package manifests, or this workflow, and on `workflow_dispatch`. The APK is uploaded as the **`android-test-apk`** artifact (90 days). It is a release build signed with the Expo debug keystore (`android` / `androiddebugkey`), so it can be sideloaded. That signature is not a Play App Signing key.
+
+`EXPO_PUBLIC_API_BASE_URL` is baked in at build time, in this order: the manual **`api_base_url`** input, the **`EXPO_PUBLIC_API_BASE_URL`** repository variable, `https://` plus **`API_DOMAIN_NAME`**, then `https://api.<FRONTEND_DOMAIN_NAME>`. The job fails when none of those is set. `android.versionCode` comes from the GitHub run number so a newer APK can replace the previous install.
+
+### `Mobile EAS build` (`.github/workflows/mobile-eas-build.yml`)
+
+Disabled (`if: false`). The job would run `eas build --platform android --profile preview` for an internal APK. It does not run until `if: false` is removed. To turn it on:
+
+1. Remove `if: false` from the job.
+2. Add the **`EXPO_TOKEN`** secret.
+3. Run `eas init` in `mobile/` and commit that app’s `extra.eas.projectId`. Project ids are per Expo project, so do not copy one from another repo.
+4. Store **`EXPO_PUBLIC_API_BASE_URL`** as an EAS environment variable for the preview profile. GitHub Actions environment variables are not forwarded to the EAS build worker.
+5. Generate Android credentials once with `eas credentials`. The command stays `--platform android`.
+
+### `Mobile iOS device` (`.github/workflows/mobile-ios-device.yml`)
+
+Disabled (`if: false`). The job would archive a signed ad hoc IPA for a physical iPhone and upload it as **`ios-device-ipa`**. It is not a TestFlight or App Store upload. The IPA installs only on devices whose UDIDs are in the provisioning profile, and that profile’s App ID must match `ios.bundleIdentifier` (`com.latanowicz.microsaas.app` in this template). To turn it on:
+
+1. Remove `if: false` from the job.
+2. Enroll in the Apple Developer Program and register the test device.
+3. Add these secrets: **`IOS_DISTRIBUTION_CERTIFICATE_BASE64`** (Apple distribution `.p12`, base64-encoded), **`IOS_DISTRIBUTION_CERTIFICATE_PASSWORD`**, **`IOS_PROVISIONING_PROFILE_BASE64`** (ad hoc `.mobileprovision`, base64-encoded), and **`IOS_TEAM_ID`**.
+
+Do not commit the certificate or the provisioning profile.
+
 ### `Deploy` (`.github/workflows/deploy.yml`)
 
 Runs on pushes to `main` and on `workflow_dispatch`: deploy backend → **run migrations Lambda** → optional Cloudflare API DNS → deploy frontend → optional Cloudflare frontend DNS.

@@ -1,0 +1,96 @@
+name: Mobile Android test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - mobile/**
+      - packages/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/mobile-android-test.yml
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: API base URL baked into the APK
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install JS workspace dependencies
+        run: npm ci
+
+      - name: Resolve API base URL
+        env:
+          INPUT_API_BASE_URL: ${{ github.event.inputs.api_base_url }}
+          VAR_EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+          VAR_API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
+          VAR_FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_API_BASE_URL}" ]; then
+            url="${INPUT_API_BASE_URL}"
+          elif [ -n "${VAR_EXPO_PUBLIC_API_BASE_URL}" ]; then
+            url="${VAR_EXPO_PUBLIC_API_BASE_URL}"
+          elif [ -n "${VAR_API_DOMAIN_NAME}" ]; then
+            url="https://${VAR_API_DOMAIN_NAME}"
+          elif [ -n "${VAR_FRONTEND_DOMAIN_NAME}" ]; then
+            url="https://api.${VAR_FRONTEND_DOMAIN_NAME}"
+          else
+            echo "Set EXPO_PUBLIC_API_BASE_URL, or API_DOMAIN_NAME, or FRONTEND_DOMAIN_NAME. A manual run can also pass api_base_url."
+            exit 1
+          fi
+          echo "EXPO_PUBLIC_API_BASE_URL=${url}" >> "${GITHUB_ENV}"
+
+      - name: Prebuild Android
+        working-directory: mobile
+        env:
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          EXPO_NO_TELEMETRY: "1"
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble release APK
+        working-directory: mobile/android
+        env:
+          EXPO_NO_TELEMETRY: "1"
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-apk
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+          if-no-files-found: error

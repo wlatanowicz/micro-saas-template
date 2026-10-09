@@ -41,7 +41,11 @@ jobs:
           java-version: "17"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # v3's default package list includes the removed legacy "tools" package,
+          # and sdkmanager fails the job with "Failed to find package 'tools'".
+          packages: platform-tools
 
       - name: Install JS workspace dependencies
         run: npm ci

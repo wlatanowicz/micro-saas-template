@@ -3,8 +3,10 @@ name: work-on-issue
 description: >-
   Implements a GitHub issue on its own branch, commits there, and opens a
   pull request. Always fetch and branch from the latest origin/main before
-  creating that branch. Use when the user asks to work on, implement, fix,
-  or build a GitHub issue. Do not use for only reading or triaging an issue.
+  creating that branch. Before every commit, run the full CI check set and
+  do not commit or push while anything fails. Use when the user asks to work
+  on, implement, fix, or build a GitHub issue. Do not use for only reading
+  or triaging an issue.
 ---
 
 # Work on an issue
@@ -38,8 +40,8 @@ Asking to work on an issue authorizes a branch, commits on that branch, a push, 
    ```
 
    If that branch or an open pull request for the issue already exists, continue it instead of creating a new one.
-2. Commit only on that branch. Reference the issue the way **github-backlog** requires (`(#N)` or `Refs #N`, and the repository close policy). Several commits on one branch are fine.
-3. Push the branch and open one pull request. The pull request body must contain this line on its own, which is what GitHub uses to link the issue (`closingIssuesReferences`):
+2. Commit only on that branch, and only after **Checks before every commit** passes. Reference the issue the way **github-backlog** requires (`(#N)` or `Refs #N`, and the repository close policy). Several commits on one branch are fine; run that full check set again before each one.
+3. Push the branch and open one pull request. After the push, wait until the push/pull-request CI workflow on that branch is green. If it fails, fix the failure, re-run the full local check set, commit, and push again. The pull request body must contain this line on its own, which is what GitHub uses to link the issue (`closingIssuesReferences`):
 
    ```
    Closes #<number>
@@ -59,6 +61,16 @@ Asking to work on an issue authorizes a branch, commits on that branch, a push, 
 
    In `body.md`, reference the same path so `gh` rewrites it to the uploaded URL: `![What changed on screen](./screenshot.png)`. If the pull request already exists, use `gh pr edit <pr> --attach './screenshot.png#What changed on screen'`. Keep `Closes #<number>` on its own line after the image.
 
+## Checks before every commit
+
+Before each commit, run every check that push and pull-request CI runs. Do not commit, push, or open a pull request while any of them fail.
+
+1. Read `.github/workflows/ci.yml`. Ignore workflows that run only on `workflow_dispatch`.
+2. From the repo root, run `make check`.
+3. Also run every CI command that `make check` does not already cover, with the environment variables that workflow sets. That includes the frontend production build and Serverless config validation, plus any extra step the workflow lists (for example mobile lint).
+4. If anything fails, fix it and run the full set again. A partial re-run is not enough.
+5. Do not skip git hooks. If a hook fails, fix it and run the full set again before a new commit.
+
 ## Scope
 
-Issue body, labels, and dependency wording stay with **github-backlog**. Planning and review pauses stay with **plan-and-incremental-build**. This skill only adds the git steps and the blocked-issue stop.
+Issue body, labels, and dependency wording stay with **github-backlog**. Planning and review pauses stay with **plan-and-incremental-build**. This skill adds the git steps, the checks before every commit, and the blocked-issue stop.

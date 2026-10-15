@@ -41,6 +41,16 @@ Asking to work on an issue authorizes a branch, commits on that branch, a push, 
 
    After `gh pr create`, confirm `gh pr view <pr> --json closingIssuesReferences` includes that issue number. If it is missing, `gh pr edit` the body to add the line and check again.
 
+4. If the change is visible in the UI, attach a screenshot of that screen in the pull request description. Skip this when there is nothing to show, a screenshot cannot be captured, or `gh` has no `--attach` flag (added in 2.99.0). Do not block the pull request on a screenshot, and do not commit the image.
+
+   Put the image in the body before the `Closes #<number>` line, and upload it with the same `gh` command:
+
+   ```
+   gh pr create --body-file body.md --attach './screenshot.png#What changed on screen'
+   ```
+
+   In `body.md`, reference the same path so `gh` rewrites it to the uploaded URL: `![What changed on screen](./screenshot.png)`. If the pull request already exists, use `gh pr edit <pr> --attach './screenshot.png#What changed on screen'`. Keep `Closes #<number>` on its own line after the image.
+
 ## Scope
 
 Issue body, labels, and dependency wording stay with **github-backlog**. Planning and review pauses stay with **plan-and-incremental-build**. This skill only adds the git steps and the blocked-issue stop.

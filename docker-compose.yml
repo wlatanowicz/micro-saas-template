@@ -76,6 +76,9 @@ services:
       - ./package.json:/repo/package.json
       - ./package-lock.json:/repo/package-lock.json
       - frontend_node_modules:/repo/node_modules
+      # Host frontend/node_modules is macOS. Keep the image's Linux install so
+      # Vite's esbuild 0.21.5 does not start the hoisted 0.28.2 binary.
+      - /repo/frontend/node_modules
     depends_on:
       - backend
 

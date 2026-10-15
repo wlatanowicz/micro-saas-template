@@ -31,7 +31,15 @@ Asking to work on an issue authorizes a branch, commits on that branch, a push, 
 
 1. Branch from the default branch: `issue/<number>-<short-slug>`. If that branch or an open pull request for the issue already exists, continue it.
 2. Commit only on that branch. Reference the issue the way **github-backlog** requires (`(#N)` or `Refs #N`, and the repository close policy). Several commits on one branch are fine.
-3. Push the branch and open one pull request linked to the issue.
+3. Push the branch and open one pull request. The pull request body must contain this line on its own, which is what GitHub uses to link the issue (`closingIssuesReferences`):
+
+   ```
+   Closes #<number>
+   ```
+
+   `Closes #<number>` also closes the issue when the pull request merges. Commit messages stay as in step 2.
+
+   After `gh pr create`, confirm `gh pr view <pr> --json closingIssuesReferences` includes that issue number. If it is missing, `gh pr edit` the body to add the line and check again.
 
 ## Scope
 

@@ -2,8 +2,9 @@
 name: work-on-issue
 description: >-
   Implements a GitHub issue on its own branch, commits there, and opens a
-  pull request. Use when the user asks to work on, implement, fix, or build
-  a GitHub issue. Do not use for only reading or triaging an issue.
+  pull request. Always fetch and branch from the latest origin/main before
+  creating that branch. Use when the user asks to work on, implement, fix,
+  or build a GitHub issue. Do not use for only reading or triaging an issue.
 ---
 
 # Work on an issue
@@ -29,7 +30,14 @@ If the issue is blocked and the user did not explicitly say to proceed anyway, s
 
 Asking to work on an issue authorizes a branch, commits on that branch, a push, and a pull request. Do not commit on the default branch.
 
-1. Branch from the default branch: `issue/<number>-<short-slug>`. If that branch or an open pull request for the issue already exists, continue it.
+1. Fetch the latest `origin/main`, then create the new branch from that ref — not from a local `main` or another feature branch:
+
+   ```
+   git fetch origin main
+   git switch -c issue/<number>-<short-slug> origin/main
+   ```
+
+   If that branch or an open pull request for the issue already exists, continue it instead of creating a new one.
 2. Commit only on that branch. Reference the issue the way **github-backlog** requires (`(#N)` or `Refs #N`, and the repository close policy). Several commits on one branch are fine.
 3. Push the branch and open one pull request. The pull request body must contain this line on its own, which is what GitHub uses to link the issue (`closingIssuesReferences`):
 
